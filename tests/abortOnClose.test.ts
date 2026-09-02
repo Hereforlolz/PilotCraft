@@ -5,6 +5,7 @@ import { abortOnPrematureClose, type CloseableResponse } from "../abortOnClose";
 
 class FakeResponse extends EventEmitter implements CloseableResponse {
   writableEnded = false;
+  destroyed = false;
 }
 
 test("a normal completed response does not abort the active request", () => {
@@ -42,4 +43,27 @@ test("does nothing when there is no active controller", () => {
     abortOnPrematureClose(res, () => null);
     res.emit("close");
   });
+});
+
+test("onDisconnect fires before abort on a premature close, not on a normal completion", () => {
+  const res = new FakeResponse();
+  const controller = { abort: () => {} } as unknown as AbortController;
+  let disconnected = false;
+
+  abortOnPrematureClose(res, () => controller, () => { disconnected = true; });
+
+  res.writableEnded = true;
+  res.emit("close");
+  assert.equal(disconnected, false, "onDisconnect must not fire for a normal completion");
+});
+
+test("onDisconnect fires on a premature close", () => {
+  const res = new FakeResponse();
+  const controller = { abort: () => {} } as unknown as AbortController;
+  let disconnected = false;
+
+  abortOnPrematureClose(res, () => controller, () => { disconnected = true; });
+
+  res.emit("close");
+  assert.equal(disconnected, true, "onDisconnect must fire when the client disconnects before completion");
 });

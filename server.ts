@@ -3,9 +3,7 @@ import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { isRetryable } from "./retry";
-import { validateOrRepair } from "./analysisRepair";
-import { abortOnPrematureClose } from "./abortOnClose";
+import { runAnalysisRoute } from "./runAnalysisRoute";
 
 dotenv.config();
 
@@ -239,120 +237,29 @@ app.post("/api/analyze", async (req, res) => {
   res.flushHeaders();
 
   const sendEvent = (type: string, data: any) => {
-    if (res.writableEnded) return;
+    if (res.writableEnded || res.destroyed) return;
     res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  // Tracks the AbortController for whichever Gemini call is currently in
-  // flight, so a timeout or client disconnect can stop the local wait for it.
-  // Note: per the SDK's own docs, aborting is a client-only operation - it
-  // stops us from waiting on the response, but Gemini may still bill for
-  // work already in progress server-side.
-  let currentAbortController: AbortController | null = null;
-  abortOnPrematureClose(res, () => currentAbortController);
-
-  const requestRepair = (modelId: string, signal: AbortSignal) => async (details: string, previousRawText: string) => {
-    const repairResponse = await ai.models.generateContent({
-      model: modelId,
-      contents: `Your previous JSON response did not match the required schema.\n\nValidation errors: ${details}\n\nYour previous response:\n${previousRawText}\n\nReturn a corrected JSON response that fixes these issues and fully matches the schema. Respond with only the corrected JSON, no commentary.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: responseSchema,
-        systemInstruction: SYSTEM_INSTRUCTION,
-        abortSignal: signal,
-      },
-    });
-    return repairResponse.text;
-  };
-
-  const runAnalysisWithTimeout = async (modelId: string, timeoutMs: number): Promise<any> => {
-    const controller = new AbortController();
-    currentAbortController = controller;
-
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        controller.abort();
-        reject(new Error('Deadline Exceeded'));
-      }, timeoutMs);
-    });
-
-    const analysisPromise = (async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: scenario,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
-          systemInstruction: SYSTEM_INSTRUCTION,
-          abortSignal: controller.signal,
-        },
-      });
-
-      const text = response.text;
-      if (!text) throw new Error("Empty response from Gemini");
-      return validateOrRepair(text, requestRepair(modelId, controller.signal));
-    })();
-    // Prevent an unhandled rejection warning if the timeout wins the race
-    // and this promise later rejects (e.g. once the aborted fetch settles).
-    analysisPromise.catch(() => {});
-
-    try {
-      return await Promise.race([analysisPromise, timeoutPromise]);
-    } finally {
-      clearTimeout(timeoutId!);
-      if (currentAbortController === controller) {
-        currentAbortController = null;
-      }
-    }
-  };
-
-  const totalTimeoutId = setTimeout(() => {
-    currentAbortController?.abort();
-    if (!res.writableEnded) {
-      sendEvent('error', { message: "Gemini is temporarily unavailable. Your information is preserved—please try again shortly." });
-      res.end();
-    }
-  }, 55000);
-
   try {
-    let result = null;
-    
-    // Attempt Primary
-    try {
-      sendEvent('status', 'Analyzing scenario with primary engine...');
-      result = await runAnalysisWithTimeout(PRIMARY_MODEL_ID, 25000);
-      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "success" });
-    } catch (error: any) {
-      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "failure" });
-      
-      if (isRetryable(error)) {
-        sendEvent('status', 'The primary model is unavailable. Trying the backup model…');
-        // Immediate fallback
-        try {
-          result = await runAnalysisWithTimeout(FALLBACK_MODEL_ID, 25000);
-          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "success" });
-        } catch (fallbackError: any) {
-          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "failure" });
-          throw new Error("Gemini is temporarily unavailable. Your information is preserved—please try again shortly.");
-        }
-      } else {
-        throw error;
-      }
-    }
-
-    if (result && !res.writableEnded) {
-      sendEvent('result', result);
-    }
-  } catch (error: any) {
-    console.error("Analysis Error:", error);
-    const message = error.message.includes("preserved") 
-      ? error.message 
-      : "The analysis engine encountered an issue. Please refine your scenario or try again in a few moments.";
-    sendEvent('error', { message });
+    await runAnalysisRoute({
+      res,
+      scenario,
+      primaryModelId: PRIMARY_MODEL_ID,
+      fallbackModelId: FALLBACK_MODEL_ID,
+      perAttemptTimeoutMs: 25000,
+      totalTimeoutMs: 55000,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseSchema,
+      // Note: per the SDK's own docs, aborting is a client-only operation -
+      // it stops us from waiting on the response, but Gemini may still bill
+      // for work already in progress server-side.
+      generateContent: (params) => ai.models.generateContent(params),
+      sendEvent,
+      logModelUsage: (model, status) => logModelUsage({ timestamp: new Date().toISOString(), model, status }),
+    });
   } finally {
-    clearTimeout(totalTimeoutId);
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   }
 });
 
