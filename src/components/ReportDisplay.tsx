@@ -54,10 +54,11 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
 
         <div className="bg-indigo-600 p-8 rounded-2xl text-white shadow-lg flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-2 opacity-90">
+            <div className="flex items-center gap-2 mb-1 opacity-90">
               <Activity className="w-4 h-4" />
               <span className="text-sm font-medium uppercase tracking-wider">Readiness Score</span>
             </div>
+            <p className="text-[10px] text-indigo-200 uppercase tracking-wide mb-2">Planning heuristic&mdash;not an objective measurement.</p>
             <div className="text-6xl font-bold mb-4">{report.readinessScore.score}%</div>
             <p className="text-indigo-100 text-sm leading-relaxed italic">
               "{report.readinessScore.explanation}"

@@ -275,7 +275,7 @@ export default function App() {
             <p className="text-xs font-bold uppercase tracking-widest">Powered by Gemini Flash</p>
           </div>
           <div className="flex items-center md:justify-end gap-6 text-slate-400 text-xs">
-            <span className="flex items-center gap-1.5"><Lock className="w-3 h-3" /> No Server-Side Storage</span>
+            <span className="flex items-center gap-1.5"><Lock className="w-3 h-3" /> No Scenario Persistence</span>
             <span className="flex items-center gap-1.5"><Info className="w-3 h-3" /> Scenarios Sent to Gemini API</span>
           </div>
         </div>

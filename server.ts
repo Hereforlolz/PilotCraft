@@ -3,7 +3,9 @@ import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { analysisReportSchema, formatZodError } from "./validation";
+import { isRetryable } from "./retry";
+import { validateOrRepair } from "./analysisRepair";
+import { abortOnPrematureClose } from "./abortOnClose";
 
 dotenv.config();
 
@@ -241,34 +243,18 @@ app.post("/api/analyze", async (req, res) => {
     res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  const isRetryable = (error: any) => {
-    const msg = error?.message?.toLowerCase() || "";
-    if (error?.name === 'AbortError' || msg.includes('timeout') || msg.includes('deadline') || msg.includes('failed validation')) {
-      return true;
-    }
-    const status = error?.code || error?.status || (error?.response?.status);
-    return [429, 503].includes(status) || msg.includes("503") || msg.includes("429");
-  };
-
   // Tracks the AbortController for whichever Gemini call is currently in
   // flight, so a timeout or client disconnect can stop the local wait for it.
   // Note: per the SDK's own docs, aborting is a client-only operation - it
   // stops us from waiting on the response, but Gemini may still bill for
   // work already in progress server-side.
   let currentAbortController: AbortController | null = null;
-  req.on('close', () => currentAbortController?.abort());
+  abortOnPrematureClose(res, () => currentAbortController);
 
-  // Ask Gemini to fix its own output once when it fails schema validation,
-  // rather than silently passing malformed data through to the UI or giving
-  // up on the first bad response.
-  const validateOrRepair = async (modelId: string, rawText: string, signal: AbortSignal) => {
-    const parsed = JSON.parse(rawText);
-    const firstAttempt = analysisReportSchema.safeParse(parsed);
-    if (firstAttempt.success) return firstAttempt.data;
-
+  const requestRepair = (modelId: string, signal: AbortSignal) => async (details: string, previousRawText: string) => {
     const repairResponse = await ai.models.generateContent({
       model: modelId,
-      contents: `Your previous JSON response did not match the required schema.\n\nValidation errors: ${formatZodError(firstAttempt.error)}\n\nYour previous response:\n${rawText}\n\nReturn a corrected JSON response that fixes these issues and fully matches the schema. Respond with only the corrected JSON, no commentary.`,
+      contents: `Your previous JSON response did not match the required schema.\n\nValidation errors: ${details}\n\nYour previous response:\n${previousRawText}\n\nReturn a corrected JSON response that fixes these issues and fully matches the schema. Respond with only the corrected JSON, no commentary.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
@@ -276,27 +262,20 @@ app.post("/api/analyze", async (req, res) => {
         abortSignal: signal,
       },
     });
-
-    const repairedText = repairResponse.text;
-    if (!repairedText) throw new Error("Empty response from Gemini repair attempt");
-
-    const repaired = analysisReportSchema.safeParse(JSON.parse(repairedText));
-    if (!repaired.success) {
-      throw new Error(`Gemini response failed validation after repair attempt: ${formatZodError(repaired.error)}`);
-    }
-    return repaired.data;
+    return repairResponse.text;
   };
 
   const runAnalysisWithTimeout = async (modelId: string, timeoutMs: number): Promise<any> => {
     const controller = new AbortController();
     currentAbortController = controller;
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
         controller.abort();
         reject(new Error('Deadline Exceeded'));
-      }, timeoutMs)
-    );
+      }, timeoutMs);
+    });
 
     const analysisPromise = (async () => {
       const response = await ai.models.generateContent({
@@ -312,13 +291,20 @@ app.post("/api/analyze", async (req, res) => {
 
       const text = response.text;
       if (!text) throw new Error("Empty response from Gemini");
-      return validateOrRepair(modelId, text, controller.signal);
+      return validateOrRepair(text, requestRepair(modelId, controller.signal));
     })();
     // Prevent an unhandled rejection warning if the timeout wins the race
     // and this promise later rejects (e.g. once the aborted fetch settles).
     analysisPromise.catch(() => {});
 
-    return Promise.race([analysisPromise, timeoutPromise]);
+    try {
+      return await Promise.race([analysisPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId!);
+      if (currentAbortController === controller) {
+        currentAbortController = null;
+      }
+    }
   };
 
   const totalTimeoutId = setTimeout(() => {
