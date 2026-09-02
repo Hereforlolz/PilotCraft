@@ -3,6 +3,7 @@ import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import { runAnalysisRoute } from "./runAnalysisRoute";
 
 dotenv.config();
 
@@ -204,6 +205,15 @@ const responseSchema = {
 
 const MAX_SCENARIO_LENGTH = 4000;
 
+const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze the workplace scenario the user describes and produce a structured adoption assessment, following these rules strictly:
+
+1. Evidence discipline: only treat a fact as established if the user actually stated it. Populate evidenceCheck.userProvidedFacts with facts taken directly from the scenario, evidenceCheck.assumptions with anything you inferred or assumed to fill gaps, and evidenceCheck.missingEvidence with concrete information that would be needed to validate the plan (e.g. current error rate, current cycle time, headcount) but was not given.
+2. Do not fabricate numbers. If the scenario doesn't state a metric, baseline, or ROI figure, do not invent one. successMetrics.baseline must say "Not provided - to be measured in pilot" (or similar) rather than a made-up figure when the user gave no baseline.
+3. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process change, an existing tool) would address the problem as well or better, say so in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
+4. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
+5. Calibrate certainty. readinessScore.score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
+6. Every entry in risks must have a specific, actionable humanReview step (who checks what, and when) - not a vague "monitor closely".`;
+
 app.post("/api/analyze", async (req, res) => {
   const clientIp = req.ip || req.socket.remoteAddress || "unknown";
   if (isRateLimited(clientIp)) {
@@ -227,88 +237,29 @@ app.post("/api/analyze", async (req, res) => {
   res.flushHeaders();
 
   const sendEvent = (type: string, data: any) => {
-    if (res.writableEnded) return;
+    if (res.writableEnded || res.destroyed) return;
     res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
   };
 
-  const isRetryable = (error: any) => {
-    const msg = error?.message?.toLowerCase() || "";
-    if (error?.name === 'AbortError' || msg.includes('timeout') || msg.includes('deadline')) {
-      return true;
-    }
-    const status = error?.code || error?.status || (error?.response?.status);
-    return [429, 503].includes(status) || msg.includes("503") || msg.includes("429");
-  };
-
-  const runAnalysisWithTimeout = async (modelId: string, timeoutMs: number): Promise<any> => {
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Deadline Exceeded')), timeoutMs)
-    );
-
-    const analysisPromise = (async () => {
-      const response = await ai.models.generateContent({
-        model: modelId,
-        contents: scenario,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: responseSchema,
-          systemInstruction: "You are an AI Adoption Strategist. Analyze workplace scenarios for AI suitability and provide a detailed structured report."
-        },
-      });
-
-      const text = response.text;
-      if (!text) throw new Error("Empty response from Gemini");
-      return JSON.parse(text);
-    })();
-
-    return Promise.race([analysisPromise, timeoutPromise]);
-  };
-
-  const totalTimeoutId = setTimeout(() => {
-    if (!res.writableEnded) {
-      sendEvent('error', { message: "Gemini is temporarily unavailable. Your information is preserved—please try again shortly." });
-      res.end();
-    }
-  }, 55000);
-
   try {
-    let result = null;
-    
-    // Attempt Primary
-    try {
-      sendEvent('status', 'Analyzing scenario with primary engine...');
-      result = await runAnalysisWithTimeout(PRIMARY_MODEL_ID, 25000);
-      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "success" });
-    } catch (error: any) {
-      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "failure" });
-      
-      if (isRetryable(error)) {
-        sendEvent('status', 'The primary model is unavailable. Trying the backup model…');
-        // Immediate fallback
-        try {
-          result = await runAnalysisWithTimeout(FALLBACK_MODEL_ID, 25000);
-          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "success" });
-        } catch (fallbackError: any) {
-          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "failure" });
-          throw new Error("Gemini is temporarily unavailable. Your information is preserved—please try again shortly.");
-        }
-      } else {
-        throw error;
-      }
-    }
-
-    if (result && !res.writableEnded) {
-      sendEvent('result', result);
-    }
-  } catch (error: any) {
-    console.error("Analysis Error:", error);
-    const message = error.message.includes("preserved") 
-      ? error.message 
-      : "The analysis engine encountered an issue. Please refine your scenario or try again in a few moments.";
-    sendEvent('error', { message });
+    await runAnalysisRoute({
+      res,
+      scenario,
+      primaryModelId: PRIMARY_MODEL_ID,
+      fallbackModelId: FALLBACK_MODEL_ID,
+      perAttemptTimeoutMs: 25000,
+      totalTimeoutMs: 55000,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      responseSchema,
+      // Note: per the SDK's own docs, aborting is a client-only operation -
+      // it stops us from waiting on the response, but Gemini may still bill
+      // for work already in progress server-side.
+      generateContent: (params) => ai.models.generateContent(params),
+      sendEvent,
+      logModelUsage: (model, status) => logModelUsage({ timestamp: new Date().toISOString(), model, status }),
+    });
   } finally {
-    clearTimeout(totalTimeoutId);
-    if (!res.writableEnded) res.end();
+    if (!res.writableEnded && !res.destroyed) res.end();
   }
 });
 
