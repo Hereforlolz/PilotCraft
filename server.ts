@@ -9,12 +9,46 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
+// Trust the first proxy hop (Cloud Run / AI Studio hosting) so req.ip reflects
+// the real client instead of the proxy, which the rate limiter below depends on.
+app.set("trust proxy", 1);
+
 // Model Configuration
 const PRIMARY_MODEL_ID = "gemini-3.6-flash";
 const FALLBACK_MODEL_ID = "gemini-3.5-flash";
 
-// Simple in-memory log for debugging (not exposed to user)
+// Simple in-memory log for debugging (not exposed to user), capped so it can't
+// grow unbounded on a long-running instance.
+const MAX_LOG_ENTRIES = 200;
 const modelUsageLog: { timestamp: string; model: string; status: string }[] = [];
+function logModelUsage(entry: { timestamp: string; model: string; status: string }) {
+  modelUsageLog.push(entry);
+  if (modelUsageLog.length > MAX_LOG_ENTRIES) modelUsageLog.shift();
+}
+
+// Per-IP rate limiting to keep the public endpoint from being used to run up
+// the Gemini bill. Sliding window, in-memory (fine for a single instance).
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX_REQUESTS = 8;
+const requestLog = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const timestamps = (requestLog.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  timestamps.push(now);
+  requestLog.set(ip, timestamps);
+  return timestamps.length > RATE_LIMIT_MAX_REQUESTS;
+}
+
+// Periodically evict IPs with no recent requests so the map doesn't grow forever.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, timestamps] of requestLog.entries()) {
+    const fresh = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (fresh.length === 0) requestLog.delete(ip);
+    else requestLog.set(ip, fresh);
+  }
+}, RATE_LIMIT_WINDOW_MS).unref();
 
 // Shared Gemini Client
 const ai = new GoogleGenAI({
@@ -26,7 +60,7 @@ const ai = new GoogleGenAI({
   }
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 // Response Schema Definition
 const responseSchema = {
@@ -168,9 +202,23 @@ const responseSchema = {
   ]
 };
 
+const MAX_SCENARIO_LENGTH = 4000;
+
 app.post("/api/analyze", async (req, res) => {
+  const clientIp = req.ip || req.socket.remoteAddress || "unknown";
+  if (isRateLimited(clientIp)) {
+    return res.status(429).json({
+      error: `Too many requests. Please wait a bit before trying again (limit: ${RATE_LIMIT_MAX_REQUESTS} per 15 minutes).`,
+    });
+  }
+
   const { scenario } = req.body;
-  if (!scenario) return res.status(400).json({ error: "Scenario is required" });
+  if (typeof scenario !== "string" || !scenario.trim()) {
+    return res.status(400).json({ error: "Scenario is required" });
+  }
+  if (scenario.length > MAX_SCENARIO_LENGTH) {
+    return res.status(400).json({ error: `Scenario is too long (max ${MAX_SCENARIO_LENGTH} characters).` });
+  }
 
   // Set headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
@@ -230,18 +278,18 @@ app.post("/api/analyze", async (req, res) => {
     try {
       sendEvent('status', 'Analyzing scenario with primary engine...');
       result = await runAnalysisWithTimeout(PRIMARY_MODEL_ID, 25000);
-      modelUsageLog.push({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "success" });
+      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "success" });
     } catch (error: any) {
-      modelUsageLog.push({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "failure" });
+      logModelUsage({ timestamp: new Date().toISOString(), model: PRIMARY_MODEL_ID, status: "failure" });
       
       if (isRetryable(error)) {
         sendEvent('status', 'The primary model is unavailable. Trying the backup model…');
         // Immediate fallback
         try {
           result = await runAnalysisWithTimeout(FALLBACK_MODEL_ID, 25000);
-          modelUsageLog.push({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "success" });
+          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "success" });
         } catch (fallbackError: any) {
-          modelUsageLog.push({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "failure" });
+          logModelUsage({ timestamp: new Date().toISOString(), model: FALLBACK_MODEL_ID, status: "failure" });
           throw new Error("Gemini is temporarily unavailable. Your information is preserved—please try again shortly.");
         }
       } else {

@@ -55,7 +55,14 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('The analysis engine encountered an unexpected error.');
+        let message = 'The analysis engine encountered an unexpected error.';
+        try {
+          const errorBody = await response.json();
+          if (errorBody?.error) message = errorBody.error;
+        } catch {
+          // Response wasn't JSON; fall back to the generic message above.
+        }
+        throw new Error(message);
       }
 
       const reader = response.body?.getReader();
