@@ -3,6 +3,7 @@ import path from "path";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import { analysisReportSchema, formatZodError } from "./validation";
 
 dotenv.config();
 
@@ -204,6 +205,15 @@ const responseSchema = {
 
 const MAX_SCENARIO_LENGTH = 4000;
 
+const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze the workplace scenario the user describes and produce a structured adoption assessment, following these rules strictly:
+
+1. Evidence discipline: only treat a fact as established if the user actually stated it. Populate evidenceCheck.userProvidedFacts with facts taken directly from the scenario, evidenceCheck.assumptions with anything you inferred or assumed to fill gaps, and evidenceCheck.missingEvidence with concrete information that would be needed to validate the plan (e.g. current error rate, current cycle time, headcount) but was not given.
+2. Do not fabricate numbers. If the scenario doesn't state a metric, baseline, or ROI figure, do not invent one. successMetrics.baseline must say "Not provided - to be measured in pilot" (or similar) rather than a made-up figure when the user gave no baseline.
+3. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process change, an existing tool) would address the problem as well or better, say so in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
+4. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
+5. Calibrate certainty. readinessScore.score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
+6. Every entry in risks must have a specific, actionable humanReview step (who checks what, and when) - not a vague "monitor closely".`;
+
 app.post("/api/analyze", async (req, res) => {
   const clientIp = req.ip || req.socket.remoteAddress || "unknown";
   if (isRateLimited(clientIp)) {
@@ -233,16 +243,59 @@ app.post("/api/analyze", async (req, res) => {
 
   const isRetryable = (error: any) => {
     const msg = error?.message?.toLowerCase() || "";
-    if (error?.name === 'AbortError' || msg.includes('timeout') || msg.includes('deadline')) {
+    if (error?.name === 'AbortError' || msg.includes('timeout') || msg.includes('deadline') || msg.includes('failed validation')) {
       return true;
     }
     const status = error?.code || error?.status || (error?.response?.status);
     return [429, 503].includes(status) || msg.includes("503") || msg.includes("429");
   };
 
+  // Tracks the AbortController for whichever Gemini call is currently in
+  // flight, so a timeout or client disconnect can stop the local wait for it.
+  // Note: per the SDK's own docs, aborting is a client-only operation - it
+  // stops us from waiting on the response, but Gemini may still bill for
+  // work already in progress server-side.
+  let currentAbortController: AbortController | null = null;
+  req.on('close', () => currentAbortController?.abort());
+
+  // Ask Gemini to fix its own output once when it fails schema validation,
+  // rather than silently passing malformed data through to the UI or giving
+  // up on the first bad response.
+  const validateOrRepair = async (modelId: string, rawText: string, signal: AbortSignal) => {
+    const parsed = JSON.parse(rawText);
+    const firstAttempt = analysisReportSchema.safeParse(parsed);
+    if (firstAttempt.success) return firstAttempt.data;
+
+    const repairResponse = await ai.models.generateContent({
+      model: modelId,
+      contents: `Your previous JSON response did not match the required schema.\n\nValidation errors: ${formatZodError(firstAttempt.error)}\n\nYour previous response:\n${rawText}\n\nReturn a corrected JSON response that fixes these issues and fully matches the schema. Respond with only the corrected JSON, no commentary.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema,
+        systemInstruction: SYSTEM_INSTRUCTION,
+        abortSignal: signal,
+      },
+    });
+
+    const repairedText = repairResponse.text;
+    if (!repairedText) throw new Error("Empty response from Gemini repair attempt");
+
+    const repaired = analysisReportSchema.safeParse(JSON.parse(repairedText));
+    if (!repaired.success) {
+      throw new Error(`Gemini response failed validation after repair attempt: ${formatZodError(repaired.error)}`);
+    }
+    return repaired.data;
+  };
+
   const runAnalysisWithTimeout = async (modelId: string, timeoutMs: number): Promise<any> => {
+    const controller = new AbortController();
+    currentAbortController = controller;
+
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Deadline Exceeded')), timeoutMs)
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error('Deadline Exceeded'));
+      }, timeoutMs)
     );
 
     const analysisPromise = (async () => {
@@ -252,19 +305,24 @@ app.post("/api/analyze", async (req, res) => {
         config: {
           responseMimeType: "application/json",
           responseSchema: responseSchema,
-          systemInstruction: "You are an AI Adoption Strategist. Analyze workplace scenarios for AI suitability and provide a detailed structured report."
+          systemInstruction: SYSTEM_INSTRUCTION,
+          abortSignal: controller.signal,
         },
       });
 
       const text = response.text;
       if (!text) throw new Error("Empty response from Gemini");
-      return JSON.parse(text);
+      return validateOrRepair(modelId, text, controller.signal);
     })();
+    // Prevent an unhandled rejection warning if the timeout wins the race
+    // and this promise later rejects (e.g. once the aborted fetch settles).
+    analysisPromise.catch(() => {});
 
     return Promise.race([analysisPromise, timeoutPromise]);
   };
 
   const totalTimeoutId = setTimeout(() => {
+    currentAbortController?.abort();
     if (!res.writableEnded) {
       sendEvent('error', { message: "Gemini is temporarily unavailable. Your information is preserved—please try again shortly." });
       res.end();

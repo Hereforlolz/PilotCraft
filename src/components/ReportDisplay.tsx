@@ -1,5 +1,5 @@
 import { AnalysisReport } from "../types";
-import { CheckCircle2, AlertTriangle, XCircle, Users, BarChart3, ShieldAlert, Rocket, Info, FileText, HelpCircle, Activity } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, Users, BarChart3, ShieldAlert, Rocket, Info, FileText, HelpCircle, Activity, SplitSquareHorizontal, Ban, GraduationCap, Milestone } from "lucide-react";
 import { motion } from "motion/react";
 
 interface ReportDisplayProps {
@@ -106,6 +106,10 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
           </div>
           <div className="space-y-4">
             <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">User-Provided Facts</p>
+              <p className="text-sm text-slate-600">{report.evidenceCheck.userProvidedFacts.join(", ") || "No facts extracted from the scenario."}</p>
+            </div>
+            <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Assumptions</p>
               <p className="text-sm text-slate-600">{report.evidenceCheck.assumptions.join(", ") || "No major assumptions identified."}</p>
             </div>
@@ -144,6 +148,40 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* Responsibility Split */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+            <SplitSquareHorizontal className="w-5 h-5" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900">Human / AI Responsibility Split</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Stays With Humans</p>
+            <ul className="space-y-2">
+              {report.responsibilitySplit.human.map((item, i) => (
+                <li key={i} className="text-sm text-slate-600 flex items-start gap-2 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
+                  <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Handled By AI</p>
+            <ul className="space-y-2">
+              {report.responsibilitySplit.ai.map((item, i) => (
+                <li key={i} className="text-sm text-indigo-900 flex items-start gap-2 bg-indigo-50 rounded-lg p-2.5 border border-indigo-100">
+                  <Activity className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
@@ -192,6 +230,59 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Adoption Barriers & Training */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+              <Ban className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900">Adoption Barriers</h3>
+          </div>
+          <div className="space-y-4">
+            {report.adoptionBarriers.map((b, i) => (
+              <div key={i} className="relative pl-4 border-l-2 border-slate-100">
+                <p className="text-sm font-bold text-slate-900 mb-1">{b.barrier}</p>
+                <p className="text-xs text-slate-500">Mitigation: {b.mitigation}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-teal-50 rounded-lg text-teal-600">
+              <GraduationCap className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-semibold text-slate-900">Training &amp; Communication</h3>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Training Actions</p>
+              <ul className="space-y-1.5">
+                {report.trainingAndCommunication.trainingActions.map((a, i) => (
+                  <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 mt-1 text-teal-400 shrink-0" />
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Communication Actions</p>
+              <ul className="space-y-1.5">
+                {report.trainingAndCommunication.communicationActions.map((a, i) => (
+                  <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 mt-1 text-teal-400 shrink-0" />
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
@@ -250,8 +341,45 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
                     <p className="text-sm font-bold text-indigo-100">{m.proposedTarget}</p>
                   </div>
                 </div>
+                <p className="text-[10px] text-slate-400 italic">Collection method: {m.collectionMethod}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Decision Criteria */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
+            <Milestone className="w-5 h-5" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-900">Go / No-Go Criteria</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-rose-50 border border-rose-100 rounded-xl p-4">
+            <p className="text-xs font-bold text-rose-700 uppercase tracking-widest mb-2">Stop</p>
+            <ul className="space-y-1.5">
+              {report.decisionCriteria.stop.map((c, i) => (
+                <li key={i} className="text-sm text-rose-900">{c}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
+            <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2">Revise</p>
+            <ul className="space-y-1.5">
+              {report.decisionCriteria.revise.map((c, i) => (
+                <li key={i} className="text-sm text-amber-900">{c}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4">
+            <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">Scale</p>
+            <ul className="space-y-1.5">
+              {report.decisionCriteria.scale.map((c, i) => (
+                <li key={i} className="text-sm text-emerald-900">{c}</li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
