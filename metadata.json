@@ -1,0 +1,6 @@
+{
+  "name": "AI Adoption Strategy Generator",
+  "description": "Analyze workplace scenarios for AI suitability and generate comprehensive adoption strategies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
