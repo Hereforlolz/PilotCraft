@@ -1,6 +1,13 @@
-import type { ValidatedAnalysisReport } from "../validation";
+import type { AnalysisReport } from "../src/types";
 
-export const validReport: ValidatedAnalysisReport = {
+// Typed against the hand-written AnalysisReport (not validation.ts's
+// z.infer-derived ValidatedAnalysisReport): Zod's type inference only
+// correctly marks fields as required when strictNullChecks is enabled,
+// which this project's tsconfig doesn't set, so z.infer<...> types here
+// come out with every field optional at the type level (runtime validation
+// is unaffected - this is a TS-only gap). The two types describe the same
+// shape; using the canonical one avoids tripping over that gap in fixtures.
+export const validReport: AnalysisReport = {
   problemStatement: "Support team spends too much time on repetitive questions.",
   clarifyingQuestions: ["What ticket volume is repetitive?"],
   aiSuitability: { rating: "conditional", rationale: "A better FAQ might work as well." },

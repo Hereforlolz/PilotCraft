@@ -1,5 +1,8 @@
 # PilotCraft
 
+[![CI](https://github.com/Hereforlolz/PilotCraft/actions/workflows/ci.yml/badge.svg)](https://github.com/Hereforlolz/PilotCraft/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 PilotCraft turns a plain-language description of a workplace problem into a
 structured, evidence-checked assessment of whether — and how — to pilot AI
 on it, rather than a "yes, use AI" recommendation.
@@ -51,6 +54,10 @@ A single structured report, rendered as one page, with:
 - **Evidence check** — user-provided facts vs. assumptions vs. missing evidence
 - **Readiness score** — a 0–100 planning heuristic (see below), with the
   specific factors that reduced it
+
+Any generated report can be exported as a Markdown file (client-side, no
+server round-trip) or printed / saved as a PDF via the browser's native
+print dialog — both buttons sit next to Regenerate above the report.
 
 ### Why the tool is allowed to recommend against AI
 
@@ -146,7 +153,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-As of this PR, `npm test` runs **32 tests, all passing**, covering:
+`npm test` runs **35 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -160,6 +167,8 @@ As of this PR, `npm test` runs **32 tests, all passing**, covering:
   on an ephemeral port): a missing or wrongly-typed request body returns a
   clean 400 instead of crashing, oversized scenarios are rejected, a valid
   request streams a result, and the per-IP rate limit returns 429
+- the Markdown export (`src/reportToMarkdown.ts`) covers every report
+  section and carries over real field content rather than placeholders
 
 CI also runs a smoke test against the actual built production server
 (`.github/workflows/ci.yml`) - hitting the homepage, an unmatched deep
@@ -209,12 +218,6 @@ These commands run automatically on every push and pull request to
   range (moderate severity, and low actual exposure here since the app
   never parses query-string arrays). The project now runs Express 5,
   which resolves a patched `qs` version.
-- **Repository metadata is currently out of date.** The GitHub repository
-  description says "Gemini 3.7 Flash"; the code uses `gemini-3.6-flash`
-  with a `gemini-3.5-flash` fallback. No tracked file contains an incorrect
-  model reference — this is a repository-settings fix, not a code fix. See
-  the note at the end of this PR's description for the exact recommended
-  text.
 
 ## Screenshot
 
@@ -222,9 +225,9 @@ These commands run automatically on every push and pull request to
 
 The input screen, captured from a locally running build. There is no
 screenshot of a generated report here: doing so honestly requires a live
-Gemini API call, and this PR was written without a production API key on
-hand. There is currently no public deployment of this app — no live-demo
-link is included because none exists to link to.
+Gemini API call, and one wasn't available when this was written. There is
+currently no public deployment of this app — no live-demo link is included
+because none exists to link to.
 
 ## AI-assistance disclosure
 
@@ -237,6 +240,6 @@ built.
 
 ## License
 
-No license file is included yet. Until one is added, default copyright
-applies and this code is not licensed for reuse. (Flagged for the repo
-owner's decision — not added in this PR.)
+[MIT](./LICENSE) — permissive, no warranty. You can use, copy, modify, and
+distribute this code, including commercially, as long as the copyright
+notice is preserved.
