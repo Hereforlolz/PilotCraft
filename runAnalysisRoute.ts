@@ -148,14 +148,20 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
         }
 
         sendEvent("status", "The primary model is unavailable. Trying the backup model…");
+        
+        // Add a small delay to let transient capacity spikes settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         try {
           result = await runModel(fallbackModelId, perAttemptTimeoutMs);
           logModelUsage(fallbackModelId, "success");
-        } catch {
+        } catch (fallbackError: any) {
           logModelUsage(fallbackModelId, "failure");
+          console.error(`Fallback model (${fallbackModelId}) failed:`, fallbackError);
           throw new Error(UNAVAILABLE_MESSAGE);
         }
       } else {
+        console.error(`Primary model (${primaryModelId}) failed with non-retryable error:`, error);
         throw error;
       }
     }

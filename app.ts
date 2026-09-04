@@ -2,8 +2,8 @@ import express, { type Express } from "express";
 import { Type } from "@google/genai";
 import { runAnalysisRoute, type GenerateContentFn } from "./runAnalysisRoute";
 
-export const DEFAULT_PRIMARY_MODEL_ID = "gemini-3.6-flash";
-export const DEFAULT_FALLBACK_MODEL_ID = "gemini-3.5-flash";
+export const DEFAULT_PRIMARY_MODEL_ID = "gemini-3.8-flash";
+export const DEFAULT_FALLBACK_MODEL_ID = "gemini-3.1-flash-lite";
 
 const MAX_SCENARIO_LENGTH = 4000;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
