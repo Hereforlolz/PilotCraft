@@ -16,14 +16,30 @@ function result(checkId: string, description: string, status: CheckStatus, detai
 
 const NOT_PROVIDED_PATTERN = /not\s+(yet\s+)?(provided|available|measured)|to be measured|no baseline|unknown/i;
 const HAS_SPECIFIC_NUMBER = /\d/;
-const CADENCE_KEYWORDS = /\b(daily|weekly|monthly|quarterly|biweekly|each|every|before|after|prior to|periodic(ally)?|upon|within \d)\b/i;
+// Cadence keywords cover recurring schedules ("weekly") as well as a
+// clearly defined event/threshold trigger ("any invoice above $10,000") -
+// both count as "who checks what, and when." Deliberately does NOT include
+// bare percentages or counts ("spot-check 10%") since those have no
+// schedule or defined trigger attached.
+const CADENCE_KEYWORDS =
+  /\b(daily|weekly|monthly|quarterly|biweekly|each|every|before|after|prior to|periodic(ally)?|upon|within \d|above|over|exceed(?:ing|s)?|greater than|more than|threshold)\b/i;
 const VAGUE_REVIEW_BOILERPLATE = /^(monitor closely|review regularly|keep an eye on|check periodically|periodic review)\.?$/i;
 const SENSITIVE_DATA_KEYWORDS = /\b(PII|personal(ly)? identifiable|health|medical|HIPAA|financial|bank(ing)?|SSN|social security|privacy|confidential)\b/i;
 const ROI_TOPIC_KEYWORDS = /\broi\b|\bsavings?\b|cost reduction|\$|percent|%/i;
 const UNVERIFIED_HEDGE_KEYWORDS =
   /\b(unverified|unsupported|unconfirmed|unsubstantiated|unproven|not\s+(?:yet\s+)?(?:verified|validated|confirmed|substantiated|independently\s+verified)|hasn'?t\s+been\s+(?:independently\s+)?(?:verified|validated|confirmed)|has\s+not\s+been\s+(?:independently\s+)?(?:verified|validated|confirmed)|assum(?:ed|es|ption)|requires?\s+validation|needs?\s+validation|needs?\s+to\s+be\s+validated|to\s+be\s+validated|remains?\s+to\s+be\s+(?:verified|validated|confirmed))\b/i;
+// Phrasal matches for a clearly-stated non-AI alternative.
 const NON_AI_ALTERNATIVE_KEYWORDS =
   /\b(non-ai|without ai|instead of (?:ai|building an ai|an ai)|cheaper (?:fix|alternative|solution|option)|simpler (?:fix|solution|option)|existing tool|process (?:change|fix)|fix(?:ing)? the (?:underlying|root|actual|broken)|root cause|underlying (?:issue|problem|cause)|fix (?:the )?(?:broken )?(?:search|index|tool|process)|reindex(?:ing)?|manual (?:fix|process)|documentation (?:fix|update|gap)|address(?:ing)? (?:the )?(?:root cause|underlying)|non[- ]ai (?:fix|alternative|solution|option)|better (?:documentation|search|tooling|process))\b/i;
+// Looser fallback: an explicit repair/improvement verb applied to one of the
+// usual suspects (search indexing, taxonomy, documentation, workflow,
+// process, an existing tool) also counts, even when phrased more loosely
+// than the fixed phrases above - e.g. "Fixing the source taxonomy and
+// search indexing is a cleaner upstream solution."
+const NON_AI_ALTERNATIVE_ACTION_KEYWORDS =
+  /\b(fix(?:ing|ed)?|repair(?:ing|ed)?|improv(?:e|ing|ed)|upgrad(?:e|ing|ed)|correct(?:ing|ed)?|clean(?:ing|ed)?\s*up|rebuild(?:ing)?|overhaul(?:ing|ed)?)\b/i;
+const NON_AI_ALTERNATIVE_TARGET_KEYWORDS =
+  /\b(indexing|index|taxonomy|search|documentation|workflow|process|existing tool|tool|tooling)\b/i;
 
 /**
  * Check 1: No fabricated baselines. When the scenario gave no numeric
@@ -92,8 +108,11 @@ export function checkNonAiAlternativeConsidered(report: AnalysisReport, scenario
     ];
   }
 
+  const rationale = report.aiSuitability.rationale;
   const pulledDown = report.aiSuitability.rating !== "strong";
-  const namesAlternative = NON_AI_ALTERNATIVE_KEYWORDS.test(report.aiSuitability.rationale);
+  const namesAlternative =
+    NON_AI_ALTERNATIVE_KEYWORDS.test(rationale) ||
+    (NON_AI_ALTERNATIVE_ACTION_KEYWORDS.test(rationale) && NON_AI_ALTERNATIVE_TARGET_KEYWORDS.test(rationale));
   const passed = pulledDown && namesAlternative;
   return [
     result(

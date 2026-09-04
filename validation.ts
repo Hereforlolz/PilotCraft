@@ -78,7 +78,7 @@ export const analysisReportSchema = z.object({
     missingEvidence: stringArray,
   }),
   readinessScore: z.object({
-    score: z.number().min(0).max(100),
+    score: z.number().int().min(0).max(100),
     explanation: nonEmptyString,
     factorsReducingScore: stringArray,
   }),
