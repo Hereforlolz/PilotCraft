@@ -222,7 +222,7 @@ app.post("/api/analyze", async (req, res) => {
     });
   }
 
-  const { scenario } = req.body;
+  const { scenario } = req.body ?? {};
   if (typeof scenario !== "string" || !scenario.trim()) {
     return res.status(400).json({ error: "Scenario is required" });
   }
