@@ -25,6 +25,10 @@ export interface RunAnalysisRouteOptions {
   fallbackModelId: string;
   perAttemptTimeoutMs: number;
   totalTimeoutMs: number;
+  /** Delay before starting the fallback model, to let transient capacity
+   * spikes settle. Defaults to 1000ms; overridable so tests don't have to
+   * actually wait a second. */
+  fallbackDelayMs?: number;
   systemInstruction: string;
   responseSchema: unknown;
   generateContent: GenerateContentFn;
@@ -47,6 +51,7 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
     fallbackModelId,
     perAttemptTimeoutMs,
     totalTimeoutMs,
+    fallbackDelayMs = 1000,
     systemInstruction,
     responseSchema,
     generateContent,
@@ -148,10 +153,15 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
         }
 
         sendEvent("status", "The primary model is unavailable. Trying the backup model…");
-        
-        // Add a small delay to let transient capacity spikes settle
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
+        // Small delay to let transient capacity spikes settle. The client
+        // can disconnect during this window, so re-check before spending a
+        // second model call on a request nobody's listening for anymore.
+        await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
+        if (clientDisconnected || res.destroyed) {
+          return;
+        }
+
         try {
           result = await runModel(fallbackModelId, perAttemptTimeoutMs);
           logModelUsage(fallbackModelId, "success");

@@ -106,11 +106,14 @@ on what a human should *not* accept blindly from it.
   — there is no separate API host.
 - **Model calls:** `@google/genai`, calling Gemini with a JSON
   `responseSchema` for structured output. Current configuration
-  (`server.ts`):
-  - Primary model: `gemini-3.6-flash`
-  - Fallback model: `gemini-3.5-flash`, tried automatically if the primary
-    fails with a retryable error (429/500/502/503/504, a timeout, or a
-    schema-validation failure that survives one repair attempt)
+  (`app.ts`):
+  - Primary model: `gemini-3.8-flash`
+  - Fallback model: `gemini-3.1-flash-lite`, tried automatically if the
+    primary fails with a retryable error (429/500/502/503/504, a timeout,
+    or a schema-validation failure that survives one repair attempt) — after
+    a 1-second delay to let transient capacity spikes settle, with the
+    client-disconnect check re-run after that delay so a client that left
+    during it doesn't still get a wasted fallback call
   - Per-attempt timeout: 25 seconds; overall request timeout: 55 seconds
 - **Output validation:** the parsed JSON response is validated at runtime
   against a Zod schema (`validation.ts`) — not just guided by the Gemini
