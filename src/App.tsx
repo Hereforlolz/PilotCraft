@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { AnalysisReport } from './types';
 import { ReportDisplay } from './components/ReportDisplay';
-import { 
-  BrainCircuit, 
-  Send, 
-  RefreshCcw, 
-  ShieldAlert, 
-  AlertCircle, 
-  Info, 
+import { reportToMarkdown } from './reportToMarkdown';
+import {
+  BrainCircuit,
+  Send,
+  RefreshCcw,
+  ShieldAlert,
+  AlertCircle,
+  Info,
   Terminal,
   Loader2,
-  Lock
+  Lock,
+  FileDown,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -104,9 +107,20 @@ export default function App() {
     }
   };
 
+  const handleDownloadMarkdown = () => {
+    if (!report) return;
+    const blob = new Blob([reportToMarkdown(report)], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'pilotcraft-adoption-strategy-report.md';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 print:hidden">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white shadow-md shadow-indigo-100">
@@ -126,7 +140,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Input Section */}
-          <section className="lg:col-span-4 space-y-8">
+          <section className="lg:col-span-4 space-y-8 print:hidden">
             <div className="space-y-2">
               <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Define Your Scenario</h2>
               <p className="text-slate-500 leading-relaxed">
@@ -191,14 +205,14 @@ export default function App() {
           </section>
 
           {/* Result Section */}
-          <section className="lg:col-span-8 min-h-[600px] relative">
+          <section className="lg:col-span-8 print:col-span-12 min-h-[600px] relative">
             <AnimatePresence mode="wait">
               {isLoading && (
                 <motion.div 
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-slate-50/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-12"
+                  className="absolute inset-0 bg-slate-50/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-center p-12 print:hidden"
                 >
                   <div className="relative mb-8">
                     <div className="w-20 h-20 border-4 border-indigo-100 rounded-full animate-pulse" />
@@ -215,7 +229,7 @@ export default function App() {
             </AnimatePresence>
 
             {error && (
-              <div className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-2xl flex gap-4 items-start shadow-sm animate-in slide-in-from-top-4 duration-500">
+              <div className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-2xl flex gap-4 items-start shadow-sm animate-in slide-in-from-top-4 duration-500 print:hidden">
                 <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
                 <div className="flex-1">
                   <h3 className="font-bold text-rose-900">Analysis Failed</h3>
@@ -232,7 +246,7 @@ export default function App() {
             )}
 
             {!report && !isLoading && !error && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-12 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+              <div className="h-full flex flex-col items-center justify-center text-center p-12 bg-white rounded-3xl border-2 border-dashed border-slate-200 print:hidden">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-300 mb-6">
                   <Terminal className="w-8 h-8" />
                 </div>
@@ -252,14 +266,30 @@ export default function App() {
                       Draft v1.0
                     </span>
                   </h2>
-                  <button
-                    onClick={() => handleAnalyze()}
-                    disabled={isLoading || cooldown > 0}
-                    className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 text-sm font-bold transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                    Regenerate
-                  </button>
+                  <div className="flex items-center gap-4 print:hidden">
+                    <button
+                      onClick={handleDownloadMarkdown}
+                      className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 text-sm font-bold transition-colors"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      Markdown
+                    </button>
+                    <button
+                      onClick={() => window.print()}
+                      className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 text-sm font-bold transition-colors"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print / Save as PDF
+                    </button>
+                    <button
+                      onClick={() => handleAnalyze()}
+                      disabled={isLoading || cooldown > 0}
+                      className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 text-sm font-bold transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                      Regenerate
+                    </button>
+                  </div>
                 </div>
                 <ReportDisplay report={report} />
               </div>
@@ -268,7 +298,7 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="bg-slate-100 py-12 mt-20 border-t border-slate-200">
+      <footer className="bg-slate-100 py-12 mt-20 border-t border-slate-200 print:hidden">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div className="flex items-center gap-3 text-slate-400 grayscale">
             <BrainCircuit className="w-6 h-6" />
