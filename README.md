@@ -94,7 +94,7 @@ on what a human should *not* accept blindly from it.
   `motion` for transitions. Streams the response via Server-Sent Events so
   the UI can show live status ("Analyzing scenario with primary engine...",
   "Trying the backup model...") while waiting.
-- **Backend:** a single Express 4 server (`server.ts`) that also serves the
+- **Backend:** a single Express 5 server (`server.ts`) that also serves the
   Vite dev middleware in development and static built assets in production
   — there is no separate API host.
 - **Model calls:** `@google/genai`, calling Gemini with a JSON
@@ -157,8 +157,8 @@ As of this PR, `npm test` runs **26 tests, all passing**, covering:
   rejected)
 - which HTTP status codes are treated as retryable
 
-There is no CI workflow configured yet — these commands are currently run
-locally / on demand.
+These three commands run automatically on every push and pull request to
+`main` via GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Privacy and data handling
 
@@ -193,11 +193,11 @@ locally / on demand.
 - **Rate limiting is basic.** The per-IP in-memory limiter resets if the
   server restarts and won't survive running multiple server instances
   behind a load balancer without a shared store.
-- **One known dependency advisory.** `npm audit` currently reports a
-  moderate-severity advisory in `qs`/`body-parser` (pulled in transitively
-  via Express 4). The actual exposure is low here — the app never parses
-  query-string arrays — and fixing it needs an Express 5 upgrade, which is
-  out of scope for this PR.
+- **Dependency advisory resolved.** An earlier version of this project ran
+  Express 4, which transitively pulled a vulnerable `qs`/`body-parser`
+  range (moderate severity, and low actual exposure here since the app
+  never parses query-string arrays). The project now runs Express 5,
+  which resolves a patched `qs` version.
 - **Repository metadata is currently out of date.** The GitHub repository
   description says "Gemini 3.7 Flash"; the code uses `gemini-3.6-flash`
   with a `gemini-3.5-flash` fallback. No tracked file contains an incorrect

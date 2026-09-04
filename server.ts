@@ -273,7 +273,9 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    // Express 5 (path-to-regexp v8) no longer accepts a bare "*" - it needs
+    // a named wildcard segment.
+    app.get("/*splat", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
