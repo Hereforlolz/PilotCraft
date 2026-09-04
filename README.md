@@ -156,7 +156,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-`npm test` runs **35 tests, all passing**, covering:
+`npm test` runs **59 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -172,6 +172,9 @@ npm run build  # vite build + esbuild bundle of server.ts
   request streams a result, and the per-IP rate limit returns 429
 - the Markdown export (`src/reportToMarkdown.ts`) covers every report
   section and carries over real field content rather than placeholders
+- the deterministic checks used by the evaluation harness below
+  (`tests/evalChecks.test.ts`), including that they correctly discriminate
+  the harness's own compliant and violating fixture reports
 
 CI also runs a smoke test against the actual built production server
 (`.github/workflows/ci.yml`) - hitting the homepage, an unmatched deep
@@ -182,6 +185,75 @@ that neither `npm run dev` nor the unit tests exercise.
 
 These commands run automatically on every push and pull request to
 `main` via GitHub Actions (`.github/workflows/ci.yml`).
+
+## Evaluation harness
+
+Unit tests check that the *code* behaves correctly (retries, validation,
+rendering). They can't tell you whether the Gemini-generated *reports*
+themselves are any good - whether a report invents a baseline the user
+never gave it, waves off an obvious non-AI fix, or hands out vague
+"monitor closely" risk mitigations. `evals/` is a small, separate harness
+for that: it runs a fixed set of synthetic workplace scenarios through the
+real analysis pipeline and scores each report against explicit,
+deterministic checks. It doesn't change any production or UI behavior -
+it's a read-only consumer of `createApp()`, the same factory the app and
+its tests use.
+
+```bash
+npm run eval                # live mode - requires GEMINI_API_KEY, calls real Gemini
+npm run eval -- --fixtures  # demo mode - canned responses, no key, no network, reproducible
+npm run eval -- --strict    # exit 1 if any check fails (combine with either mode above)
+```
+
+With no `GEMINI_API_KEY` set, `npm run eval` automatically falls back to
+`--fixtures` mode. **The results checked into this repo
+(`evals/results.md`, `evals/results/latest.json`) were generated in
+fixtures mode** - they demonstrate that the harness itself correctly tells
+compliant reports from violating ones, not the quality of live Gemini
+output. Run in live mode locally (with your own `GEMINI_API_KEY` in a
+gitignored `.env` - never paste an API key into chat or commit it) to
+evaluate real model behavior.
+
+**Scenarios** (`evals/scenarios.ts`): 9 synthetic workplace requests
+spanning strong, conditional, and poor AI-adoption candidates, plus
+scenarios that specifically probe missing baseline evidence, an obvious
+non-AI alternative, sensitive data (health, financial), adoption
+resistance, and an unsupported ROI claim asserted by the user. Each
+scenario carries a `rubric` of ground truth about itself (e.g. "no
+baseline was given" or "an obvious non-AI fix exists") that the checks
+below use as the pass/fail bar.
+
+**Checks** (`evals/checks.ts`): seven deterministic, heuristic checks run
+against every report -
+
+- no fabricated baselines (when the scenario gave none)
+- at least one concrete evidence gap is named
+- an obvious non-AI alternative pulls the suitability rating down
+- every risk's human-review step is substantive and names a cadence, not
+  boilerplate like "monitor closely"
+- the suitability rating and readiness score are calibrated to the
+  scenario's actual evidence
+- sensitive-data handling is flagged as a risk when the scenario involves
+  it
+- an unsupported ROI claim is surfaced as unverified, not repeated as fact
+
+These are regex/keyword heuristics, not semantic judgment - they can
+produce false negatives if a model phrases something correct in an
+unrecognized way. Treat failures as "worth a human look," not ground
+truth. `tests/evalChecks.test.ts` unit-tests each check in isolation and
+also runs them against the harness's own fixture reports (four are
+deliberately authored to violate a specific check) to confirm the checks
+actually discriminate good reports from bad ones rather than passing
+everything.
+
+**Runner** (`evals/runEval.ts`): for each scenario, spins up a fresh
+`createApp()` instance on its own ephemeral port (so the app's real
+per-IP rate limiter doesn't spuriously fail later scenarios), POSTs to
+`/api/analyze`, parses the SSE response the same way the browser client
+does, and runs the checks against the resulting report. Writes a
+machine-readable `evals/results/latest.json` and a human-readable
+`evals/results.md` (pass rates per scenario and per check, plus the
+specific detail of every failure).
 
 ## Privacy and data handling
 
