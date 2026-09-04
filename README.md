@@ -146,7 +146,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-As of this PR, `npm test` runs **26 tests, all passing**, covering:
+As of this PR, `npm test` runs **32 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -156,8 +156,19 @@ As of this PR, `npm test` runs **26 tests, all passing**, covering:
 - the Zod schema's boundaries (e.g. `readinessScore.score` outside 0–100 is
   rejected)
 - which HTTP status codes are treated as retryable
+- the real Express route end-to-end (`tests/app.test.ts`, via `createApp()`
+  on an ephemeral port): a missing or wrongly-typed request body returns a
+  clean 400 instead of crashing, oversized scenarios are rejected, a valid
+  request streams a result, and the per-IP rate limit returns 429
 
-These three commands run automatically on every push and pull request to
+CI also runs a smoke test against the actual built production server
+(`.github/workflows/ci.yml`) - hitting the homepage, an unmatched deep
+route (guards the Express 5 wildcard-route regression), and an invalid
+`/api/analyze` request (guards the request-body regression) - since both
+of those bugs lived specifically in the `NODE_ENV=production` code path
+that neither `npm run dev` nor the unit tests exercise.
+
+These commands run automatically on every push and pull request to
 `main` via GitHub Actions (`.github/workflows/ci.yml`).
 
 ## Privacy and data handling
