@@ -19,7 +19,11 @@ const HAS_SPECIFIC_NUMBER = /\d/;
 const CADENCE_KEYWORDS = /\b(daily|weekly|monthly|quarterly|biweekly|each|every|before|after|prior to|periodic(ally)?|upon|within \d)\b/i;
 const VAGUE_REVIEW_BOILERPLATE = /^(monitor closely|review regularly|keep an eye on|check periodically|periodic review)\.?$/i;
 const SENSITIVE_DATA_KEYWORDS = /\b(PII|personal(ly)? identifiable|health|medical|HIPAA|financial|bank(ing)?|SSN|social security|privacy|confidential)\b/i;
-const ROI_HEDGE_KEYWORDS = /\broi\b|\bsavings?\b|cost reduction|\$|percent|%/i;
+const ROI_TOPIC_KEYWORDS = /\broi\b|\bsavings?\b|cost reduction|\$|percent|%/i;
+const UNVERIFIED_HEDGE_KEYWORDS =
+  /\b(unverified|unsupported|unconfirmed|unsubstantiated|unproven|not\s+(?:yet\s+)?(?:verified|validated|confirmed|substantiated|independently\s+verified)|hasn'?t\s+been\s+(?:independently\s+)?(?:verified|validated|confirmed)|has\s+not\s+been\s+(?:independently\s+)?(?:verified|validated|confirmed)|assum(?:ed|es|ption)|requires?\s+validation|needs?\s+validation|needs?\s+to\s+be\s+validated|to\s+be\s+validated|remains?\s+to\s+be\s+(?:verified|validated|confirmed))\b/i;
+const NON_AI_ALTERNATIVE_KEYWORDS =
+  /\b(non-ai|without ai|instead of (?:ai|building an ai|an ai)|cheaper (?:fix|alternative|solution|option)|simpler (?:fix|solution|option)|existing tool|process (?:change|fix)|fix(?:ing)? the (?:underlying|root|actual|broken)|root cause|underlying (?:issue|problem|cause)|fix (?:the )?(?:broken )?(?:search|index|tool|process)|reindex(?:ing)?|manual (?:fix|process)|documentation (?:fix|update|gap)|address(?:ing)? (?:the )?(?:root cause|underlying)|non[- ]ai (?:fix|alternative|solution|option)|better (?:documentation|search|tooling|process))\b/i;
 
 /**
  * Check 1: No fabricated baselines. When the scenario gave no numeric
@@ -72,14 +76,16 @@ export function checkMissingEvidenceIdentified(report: AnalysisReport, _scenario
  * Check 3: Non-AI alternative considered. When the scenario has an obvious
  * cheaper non-AI fix, the suitability rating should not default to
  * "strong" - the system prompt explicitly instructs weighing alternatives
- * and letting that pull the rating down.
+ * and letting that pull the rating down. A lower rating alone isn't
+ * enough, though: the rationale must actually name the non-AI alternative
+ * it weighed, not just land on a lower score for unrelated reasons.
  */
 export function checkNonAiAlternativeConsidered(report: AnalysisReport, scenario: EvalScenario): CheckResult[] {
   if (!scenario.rubric.obviousNonAiAlternative) {
     return [
       result(
         "non-ai-alternative-considered",
-        "Rating reflects an obvious non-AI alternative",
+        "Rating reflects an obvious non-AI alternative, named in the rationale",
         "skipped",
         "Scenario has no obvious non-AI alternative; this check only applies when one exists."
       ),
@@ -87,12 +93,14 @@ export function checkNonAiAlternativeConsidered(report: AnalysisReport, scenario
   }
 
   const pulledDown = report.aiSuitability.rating !== "strong";
+  const namesAlternative = NON_AI_ALTERNATIVE_KEYWORDS.test(report.aiSuitability.rationale);
+  const passed = pulledDown && namesAlternative;
   return [
     result(
       "non-ai-alternative-considered",
-      "Rating reflects an obvious non-AI alternative",
-      pulledDown ? "pass" : "fail",
-      `aiSuitability.rating: "${report.aiSuitability.rating}" (expected not "strong")`
+      "Rating reflects an obvious non-AI alternative, named in the rationale",
+      passed ? "pass" : "fail",
+      `aiSuitability.rating: "${report.aiSuitability.rating}" (expected not "strong"); rationale: "${report.aiSuitability.rationale}"`
     ),
   ];
 }
@@ -182,7 +190,11 @@ export function checkSensitiveDataFlagged(report: AnalysisReport, scenario: Eval
 /**
  * Check 7: An unsupported ROI claim asserted by the user isn't parroted
  * back as an established fact - it should surface as an assumption or a
- * piece of missing evidence to validate.
+ * piece of missing evidence to validate. Merely mentioning "ROI" or
+ * "savings" isn't enough - an entry that repeats the figure as if it were
+ * confirmed (e.g. "the claimed savings are achievable") would match on
+ * topic alone, so the same entry must also carry explicit hedging
+ * language (unverified, unsupported, assumed, requires validation, etc.).
  */
 export function checkUnsupportedRoiNotParroted(report: AnalysisReport, scenario: EvalScenario): CheckResult[] {
   if (!scenario.rubric.unsupportedRoiClaim) {
@@ -197,7 +209,7 @@ export function checkUnsupportedRoiNotParroted(report: AnalysisReport, scenario:
   }
 
   const flaggedAsUnverified = [...report.evidenceCheck.assumptions, ...report.evidenceCheck.missingEvidence].some(
-    (entry) => ROI_HEDGE_KEYWORDS.test(entry)
+    (entry) => ROI_TOPIC_KEYWORDS.test(entry) && UNVERIFIED_HEDGE_KEYWORDS.test(entry)
   );
   return [
     result(
@@ -205,8 +217,8 @@ export function checkUnsupportedRoiNotParroted(report: AnalysisReport, scenario:
       "An unsupported ROI claim is surfaced as unverified, not treated as fact",
       flaggedAsUnverified ? "pass" : "fail",
       flaggedAsUnverified
-        ? "found an ROI/savings-related entry in assumptions or missingEvidence"
-        : "no assumptions/missingEvidence entry addresses the ROI claim"
+        ? "found an ROI/savings-related entry that also hedges it as unverified/unsupported/assumed/needing validation"
+        : "no assumptions/missingEvidence entry both addresses the ROI claim and hedges it as unverified"
     ),
   ];
 }
