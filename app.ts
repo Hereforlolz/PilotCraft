@@ -11,7 +11,9 @@ const RATE_LIMIT_MAX_REQUESTS = 8;
 const MAX_LOG_ENTRIES = 200;
 
 // Response Schema Definition
-const responseSchema = {
+// Exported (alongside SYSTEM_INSTRUCTION below) so tests can assert on the
+// actual model contract sent to Gemini, not a duplicated copy of it.
+export const responseSchema = {
   // ... (keeping existing schema)
   type: Type.OBJECT,
   properties: {
@@ -136,7 +138,15 @@ const responseSchema = {
     readinessScore: {
       type: Type.OBJECT,
       properties: {
-        score: { type: Type.NUMBER },
+        score: {
+          type: Type.INTEGER,
+          minimum: 0,
+          maximum: 100,
+          description:
+            "Integer from 0 through 100 - a percentage-style planning-readiness heuristic, NOT a 0-10 scale. " +
+            "Convert any intuitive \"out of 10\" sense before writing it down: 7/10 must be written as 70, not 7. " +
+            "Must be calibrated to the evidence actually available - lower when key evidence is missing."
+        },
         explanation: { type: Type.STRING },
         factorsReducingScore: { type: Type.ARRAY, items: { type: Type.STRING } }
       },
@@ -150,14 +160,16 @@ const responseSchema = {
   ]
 };
 
-const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze the workplace scenario the user describes and produce a structured adoption assessment, following these rules strictly:
+export const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze the workplace scenario the user describes and produce a structured adoption assessment, following these rules strictly:
 
 1. Evidence discipline: only treat a fact as established if the user actually stated it. Populate evidenceCheck.userProvidedFacts with facts taken directly from the scenario, evidenceCheck.assumptions with anything you inferred or assumed to fill gaps, and evidenceCheck.missingEvidence with concrete information that would be needed to validate the plan (e.g. current error rate, current cycle time, headcount) but was not given.
 2. Do not fabricate numbers. If the scenario doesn't state a metric, baseline, or ROI figure, do not invent one. successMetrics.baseline must say "Not provided - to be measured in pilot" (or similar) rather than a made-up figure when the user gave no baseline.
-3. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process change, an existing tool) would address the problem as well or better, say so in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
-4. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
-5. Calibrate certainty. readinessScore.score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
-6. Every entry in risks must have a specific, actionable humanReview step (who checks what, and when) - not a vague "monitor closely".`;
+3. Unsupported claims stay claims. If the user asserts an ROI, savings, cost-reduction, replacement, or productivity figure (e.g. "this will cut costs by 80%"), record it in evidenceCheck.userProvidedFacts as a claim the user made, not as an established fact, and add a matching entry to evidenceCheck.assumptions or evidenceCheck.missingEvidence that explicitly says the figure is unverified and needs validation. Never treat an unverified claim like this as proven evidence when setting aiSuitability, pilotPlan, or decisionCriteria.
+4. A "strong" suitability rating requires actual evidence: a stated baseline, workflow detail, articulated success criteria, or a validated user need. If none of these were given, do not rate "strong" just because the task looks easy to automate - default to "conditional" until that evidence is collected, even for an apparently simple task.
+5. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process or workflow change, fixing an existing tool, search, or taxonomy) would address the problem as well or better, say so explicitly in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
+6. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
+7. Calibrate certainty. readinessScore.score is an integer from 0 through 100 - a percentage-style planning heuristic, NOT a 0-10 scale. Convert any intuitive "out of 10" sense before writing it down: 7/10 must be written as 70, not 7. The score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
+8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".`;
 
 export interface CreateAppOptions {
   generateContent: GenerateContentFn;

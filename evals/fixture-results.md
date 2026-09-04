@@ -1,6 +1,6 @@
 # PilotCraft evaluation results
 
-Generated: 2026-09-04T22:06:47.986Z
+Generated: 2026-09-04T22:46:47.244Z
 Mode: **fixtures** (canned responses - demonstrates the harness itself, not live Gemini quality)
 
 ## Summary

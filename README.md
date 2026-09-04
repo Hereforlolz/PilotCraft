@@ -97,6 +97,28 @@ on what a human should *not* accept blindly from it.
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    A["User scenario (React UI)"] --> B["Express POST /api/analyze"]
+    B --> C["Primary: Gemini 3.8 Flash"]
+    C -->|"retryable failure (429/5xx/timeout)"| F["Fallback: Gemini 3.1 Flash-Lite"]
+    C --> D["Validate + one same-model repair"]
+    F --> D
+    D --> V["Validated report"]
+    V --> S["SSE stream"]
+    S --> U["Browser displays report"]
+    U --> X["Markdown / PDF export"]
+```
+
+The browser posts the scenario to Express, which calls the primary model
+first. A response (from either model) is checked against the Zod schema and
+gets exactly one same-model repair attempt if it fails; the fallback model
+is only tried after the primary call itself fails with a retryable error
+(a 429/5xx status, a timeout, or a repair attempt that's still invalid) —
+never as a first choice. Once a report validates, it streams back over
+Server-Sent Events for the browser to render, download as Markdown, or
+print to PDF.
+
 - **Frontend:** React 19 + Vite 6, Tailwind CSS 4, `lucide-react` icons,
   `motion` for transitions. Streams the response via Server-Sent Events so
   the UI can show live status ("Analyzing scenario with primary engine...",
@@ -117,10 +139,10 @@ on what a human should *not* accept blindly from it.
   - Per-attempt timeout: 25 seconds; overall request timeout: 55 seconds
 - **Output validation:** the parsed JSON response is validated at runtime
   against a Zod schema (`validation.ts`) — not just guided by the Gemini
-  schema, actually checked (enum values, `readinessScore.score` in 0–100,
-  required fields present). On a validation or JSON-parse failure, the
-  server asks Gemini once to correct its own output before falling back to
-  the secondary model.
+  schema, actually checked (enum values, `readinessScore.score` as an
+  integer 0–100, required fields present). On a validation or JSON-parse
+  failure, the server asks Gemini once to correct its own output before
+  falling back to the secondary model.
 - **Abuse protection:** a per-IP in-memory rate limiter (8 requests per 15
   minutes) and a 4,000-character scenario cap, since the app has no
   authentication and is meant to be reachable publicly.
@@ -156,7 +178,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-`npm test` runs **63 tests, all passing**, covering:
+`npm test` runs **74 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -179,6 +201,13 @@ npm run build  # vite build + esbuild bundle of server.ts
   must refuse to run in live mode without a `GEMINI_API_KEY` rather than
   silently falling back to fixtures, and fixture mode must never write to
   the files reserved for live results
+- the Gemini model contract itself (`tests/appContract.test.ts`): the
+  response schema and system instruction actually state that
+  `readinessScore.score` is a 0–100 integer (not a 0–10 scale), that a
+  `"strong"` rating requires real evidence, that unsupported ROI/savings
+  claims must be recorded as unverified claims rather than fact, and that a
+  defined threshold counts as an actionable human-review trigger alongside
+  a recurring cadence
 
 CI also runs a smoke test against the actual built production server
 (`.github/workflows/ci.yml`) - hitting the homepage, an unmatched deep
@@ -202,6 +231,23 @@ real analysis pipeline and scores each report against explicit,
 deterministic checks. It doesn't change any production or UI behavior -
 it's a read-only consumer of `createApp()`, the same factory the app and
 its tests use.
+
+```mermaid
+flowchart TD
+    A["9 synthetic scenarios (evals/scenarios.ts)"] --> B["evals/runEval.ts"]
+    B --> C["createApp() + /api/analyze"]
+    C --> D["Live Gemini response"]
+    D --> E["7 deterministic heuristic checks"]
+    E --> F["evals/results.md"]
+    E --> G["evals/results/latest.json"]
+```
+
+The runner drives each scenario through the exact same `createApp()` and
+`/api/analyze` route the production server uses — not a mock or a
+duplicated code path — so a live run reflects real Gemini output rather
+than a simulation of it. Every resulting report is scored against the same
+seven heuristic checks, and the pass/fail detail is written out in both a
+human-readable Markdown summary and a machine-readable JSON file.
 
 ```bash
 npm run eval                # live mode - requires GEMINI_API_KEY, calls real Gemini
@@ -243,14 +289,21 @@ against every report -
 
 - no fabricated baselines (when the scenario gave none)
 - at least one concrete evidence gap is named
-- an obvious non-AI alternative pulls the suitability rating down
-- every risk's human-review step is substantive and names a cadence, not
-  boilerplate like "monitor closely"
+- an obvious non-AI alternative pulls the suitability rating down, and the
+  rationale actually names the alternative (repairing search/indexing,
+  taxonomy, documentation, workflow, process, or an existing tool - not
+  just a lower rating for unrelated reasons)
+- every risk's human-review step is substantive and names either a
+  recurring cadence or a clearly defined trigger/threshold (e.g. "any
+  invoice above $10,000"), not boilerplate like "monitor closely" or an
+  unscheduled "spot-check 10%"
 - the suitability rating and readiness score are calibrated to the
   scenario's actual evidence
 - sensitive-data handling is flagged as a risk when the scenario involves
   it
-- an unsupported ROI claim is surfaced as unverified, not repeated as fact
+- an unsupported ROI claim is surfaced as unverified (explicitly hedged as
+  unverified/unsupported/assumed/needing validation), not merely mentioned
+  or repeated as if it were confirmed fact
 
 These are regex/keyword heuristics, not semantic judgment - they can
 produce false negatives if a model phrases something correct in an

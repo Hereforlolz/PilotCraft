@@ -118,6 +118,21 @@ test("checkNonAiAlternativeConsidered: passes when rating is pulled down and the
   assert.equal(check.status, "pass");
 });
 
+test("checkNonAiAlternativeConsidered: passes on a repair verb + target noun even when it doesn't match the fixed phrases (demonstrated false negative)", () => {
+  const scenario = scenarioWith({ obviousNonAiAlternative: true });
+  const report = reportWith({
+    aiSuitability: {
+      rating: "conditional",
+      // Real text that a live run produced and the check used to wrongly fail:
+      // no "fix the search/index/tool" phrase, no "root cause"/"underlying
+      // issue" phrase - just "fixing" + "taxonomy"/"search indexing".
+      rationale: "Fixing the source taxonomy and search indexing is a cleaner upstream solution.",
+    },
+  });
+  const [check] = checkNonAiAlternativeConsidered(report, scenario);
+  assert.equal(check.status, "pass");
+});
+
 // --- checkActionableHumanReview ---
 
 test("checkActionableHumanReview: fails on vague boilerplate", () => {
@@ -149,6 +164,37 @@ test("checkActionableHumanReview: passes with a substantive cadence", () => {
   });
   const [check] = checkActionableHumanReview(report, scenarioWith({}));
   assert.equal(check.status, "pass");
+});
+
+test("checkActionableHumanReview: passes on a defined threshold trigger, not just a recurring cadence", () => {
+  const report = reportWith({
+    risks: [
+      {
+        risk: "x",
+        severity: "medium",
+        safeguard: "y",
+        humanReview: "AP lead reviews every invoice above a $10,000 threshold before it is paid.",
+      },
+    ],
+  });
+  const [check] = checkActionableHumanReview(report, scenarioWith({}));
+  assert.equal(check.status, "pass");
+});
+
+test("checkActionableHumanReview: still fails an unscheduled spot-check with no cadence or threshold", () => {
+  const report = reportWith({
+    risks: [{ risk: "x", severity: "medium", safeguard: "y", humanReview: "Spot-check 10% of decisions." }],
+  });
+  const [check] = checkActionableHumanReview(report, scenarioWith({}));
+  assert.equal(check.status, "fail");
+});
+
+test("checkActionableHumanReview: still fails 'monitor closely' even after the threshold-recognition change", () => {
+  const report = reportWith({
+    risks: [{ risk: "x", severity: "medium", safeguard: "y", humanReview: "Monitor closely." }],
+  });
+  const [check] = checkActionableHumanReview(report, scenarioWith({}));
+  assert.equal(check.status, "fail");
 });
 
 // --- checkEvidenceCalibratedSuitability ---
