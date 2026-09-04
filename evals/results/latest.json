@@ -1,0 +1,576 @@
+{
+  "mode": "live",
+  "generatedAt": "2026-09-04T22:55:39.728Z",
+  "results": [
+    {
+      "id": "strong-faq-triage",
+      "title": "Strong: repetitive support ticket triage",
+      "category": "strong",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines",
+          "description": "Baselines are not fabricated when none was given",
+          "status": "skipped",
+          "detail": "Scenario provided a baseline; this check only applies when none was given."
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 2 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI suggests incorrect return policy\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Agent must read and approve every draft before sending\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Data leakage of PII\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Security team audit of the data pipeline monthly\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"strong\" (acceptable: strong, conditional)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 65 (expected 50-100)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "strong-invoice-routing",
+      "title": "Strong: invoice cost-center classification",
+      "category": "strong",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines",
+          "description": "Baselines are not fabricated when none was given",
+          "status": "skipped",
+          "detail": "Scenario provided a baseline; this check only applies when none was given."
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 2 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"Incorrect classification of high-value invoices\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"The AP lead must review all invoices flagged as 'high value' or 'low confidence' prior to final ledger entry.\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Data privacy breach during processing\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"IT audit of data retention logs on a monthly basis.\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"strong\" (acceptable: strong, conditional)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 85 (expected 50-100)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "conditional-broken-search",
+      "title": "Conditional: obvious non-AI alternative (broken internal search)",
+      "category": "conditional",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Search deflection rate\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "pass",
+          "detail": "aiSuitability.rating: \"conditional\" (expected not \"strong\"); rationale: \"While an AI RAG (Retrieval-Augmented Generation) system is effective for search, a simpler fix might include improving the underlying metadata/taxonomy of the existing CMS. If the underlying data is poorly organized, an AI wrapper will struggle as much as the current search engine. Proceed only if the documentation is current and high-quality.\""
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"Bot provides hallucinated or outdated policy info\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Daily spot-check of low-confidence answers by the Knowledge Management team\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Access to restricted documents leaked to unauthorized employees\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Weekly security audit of user access logs by IT Security team\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: conditional, poor)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 40 (expected 0-65)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "conditional-missing-baseline",
+      "title": "Conditional: no baseline evidence given at all",
+      "category": "conditional",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Drafting time per caption\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI hallucinations regarding product features\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Marketing Manager review for every post before publication\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Inconsistent brand voice\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Weekly review of AI-generated vs manually-edited drafts\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: conditional, poor)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 30 (expected 0-60)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "poor-legal-judgment",
+      "title": "Poor: high-stakes legal judgment calls",
+      "category": "poor",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Review cycle time\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI misclassification leading to uncapped liability.\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Senior Legal Counsel must review every contract marked 'acceptable' by the system.\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Data leakage of sensitive vendor/contract data.\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"IT Security audit before deployment and quarterly compliance check.\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: poor, conditional)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 35 (expected 0-45)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "poor-adoption-resistance",
+      "title": "Poor: severe adoption resistance",
+      "category": "poor",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Labor relations stability\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"Labor walkout and operational stoppage\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Monthly review by joint labor-management safety and productivity committee\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Algorithmic bias against certain shifts or stations\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Weekly manual audit by Operations Manager of flagged anomalies\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"poor\" (acceptable: poor, conditional)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 10 (expected 0-45)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "sensitive-health-intake",
+      "title": "Sensitive data: patient intake message triage",
+      "category": "conditional",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Triage Time Savings\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI misclassifies a medical emergency as a routine scheduling request\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Daily audit of 10% of routed messages to ensure accuracy; immediate review of all flagged urgent items by the Nursing lead.\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Handling of PHI\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Monthly security and compliance audit conducted by the Privacy Officer.\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: conditional, poor)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 40 (expected 0-60)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "pass",
+          "detail": "found a risk entry naming sensitive-data handling"
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    },
+    {
+      "id": "unsupported-roi-claim",
+      "title": "Unsupported ROI claim asserted by the user",
+      "category": "poor",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Ticket Resolution Rate\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "no-fabricated-baselines[1]",
+          "description": "successMetrics[1] (\"Customer Satisfaction Score (CSAT)\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 4 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI hallucination regarding company policy\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Supervisor must audit 10% of AI-generated responses weekly.\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Data privacy breach\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Compliance officer must approve final data handling architecture before go-live.\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: conditional, poor)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 30 (expected 0-55)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "skipped",
+          "detail": "Scenario doesn't involve sensitive data; this check only applies when it does."
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "pass",
+          "detail": "found an ROI/savings-related entry that also hedges it as unverified/unsupported/assumed/needing validation"
+        }
+      ]
+    },
+    {
+      "id": "conditional-financial-data",
+      "title": "Sensitive data: expense report reimbursement approval",
+      "category": "conditional",
+      "status": "evaluated",
+      "checks": [
+        {
+          "checkId": "no-fabricated-baselines[0]",
+          "description": "successMetrics[0] (\"Processing Time per Report\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "no-fabricated-baselines[1]",
+          "description": "successMetrics[1] (\"AI Accuracy Rate\") baseline is honestly hedged, not invented",
+          "status": "pass",
+          "detail": "baseline text: \"Not provided - to be measured in pilot\""
+        },
+        {
+          "checkId": "missing-evidence-identified",
+          "description": "At least one concrete evidence gap is named",
+          "status": "pass",
+          "detail": "missingEvidence has 3 entries"
+        },
+        {
+          "checkId": "non-ai-alternative-considered",
+          "description": "Rating reflects an obvious non-AI alternative, named in the rationale",
+          "status": "skipped",
+          "detail": "Scenario has no obvious non-AI alternative; this check only applies when one exists."
+        },
+        {
+          "checkId": "actionable-human-review[0]",
+          "description": "risks[0] (\"AI incorrectly validates a non-compliant expense\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"Finance manager reviews all AI-flagged discrepancies daily\""
+        },
+        {
+          "checkId": "actionable-human-review[1]",
+          "description": "risks[1] (\"Data leakage of sensitive bank account details\") has an actionable human-review step",
+          "status": "pass",
+          "detail": "humanReview: \"IT Security audit of the integration layer before launch\""
+        },
+        {
+          "checkId": "evidence-calibrated-rating",
+          "description": "Suitability rating matches the scenario's evidence profile",
+          "status": "pass",
+          "detail": "rating: \"conditional\" (acceptable: conditional, strong)"
+        },
+        {
+          "checkId": "evidence-calibrated-score",
+          "description": "Readiness score falls in the range the evidence supports",
+          "status": "pass",
+          "detail": "score: 45 (expected 30-100)"
+        },
+        {
+          "checkId": "sensitive-data-flagged",
+          "description": "Sensitive data handling is flagged as a risk",
+          "status": "pass",
+          "detail": "found a risk entry naming sensitive-data handling"
+        },
+        {
+          "checkId": "unsupported-roi-not-parroted",
+          "description": "An unsupported ROI claim is surfaced as unverified, not treated as fact",
+          "status": "skipped",
+          "detail": "Scenario doesn't assert an unsupported ROI claim; this check only applies when it does."
+        }
+      ]
+    }
+  ]
+}
