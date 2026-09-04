@@ -66,7 +66,7 @@ alternatives (better documentation, a process change, an existing tool)
 before recommending AI, and to let that pull the suitability rating toward
 `conditional` or `poor` rather than defaulting to `strong`. A report that
 always says "yes, use AI" would not be useful — see
-[`server.ts`](./server.ts) for the exact system instruction.
+[`app.ts`](./app.ts) for the exact system instruction.
 
 ### Evidence discipline
 
@@ -156,7 +156,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-`npm test` runs **59 tests, all passing**, covering:
+`npm test` runs **63 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -175,6 +175,10 @@ npm run build  # vite build + esbuild bundle of server.ts
 - the deterministic checks used by the evaluation harness below
   (`tests/evalChecks.test.ts`), including that they correctly discriminate
   the harness's own compliant and violating fixture reports
+- the evaluation harness's CLI safety gate (`tests/runEval.test.ts`): it
+  must refuse to run in live mode without a `GEMINI_API_KEY` rather than
+  silently falling back to fixtures, and fixture mode must never write to
+  the files reserved for live results
 
 CI also runs a smoke test against the actual built production server
 (`.github/workflows/ci.yml`) - hitting the homepage, an unmatched deep
@@ -205,14 +209,25 @@ npm run eval -- --fixtures  # demo mode - canned responses, no key, no network, 
 npm run eval -- --strict    # exit 1 if any check fails (combine with either mode above)
 ```
 
-With no `GEMINI_API_KEY` set, `npm run eval` automatically falls back to
-`--fixtures` mode. **The results checked into this repo
-(`evals/results.md`, `evals/results/latest.json`) were generated in
-fixtures mode** - they demonstrate that the harness itself correctly tells
-compliant reports from violating ones, not the quality of live Gemini
-output. Run in live mode locally (with your own `GEMINI_API_KEY` in a
-gitignored `.env` - never paste an API key into chat or commit it) to
-evaluate real model behavior.
+`.env` is loaded automatically (same as `npm run dev`). **Live mode
+requires a real `GEMINI_API_KEY`** and fails immediately with instructions
+if one isn't set — it never silently substitutes fixtures, so a missing
+key can't accidentally get mistaken for a real evaluation run. Fixture
+mode is opt-in only, via the explicit `--fixtures` flag.
+
+The two modes write to different files so they can never be confused:
+
+- **Live mode** writes `evals/results.md` and `evals/results/latest.json`
+  — these are reserved for actual Gemini output and are only present once
+  someone has run the harness with a real key.
+- **Fixture mode** writes `evals/fixture-results.md` — a demo of the
+  harness itself (does the checks correctly separate compliant reports
+  from violating ones), not a report on live Gemini quality. **The
+  `evals/fixture-results.md` checked into this repo was generated this
+  way**, since this environment doesn't have a `GEMINI_API_KEY`. Run in
+  live mode locally (with your own key in a gitignored `.env` — never
+  paste an API key into chat or commit it) to evaluate real model
+  behavior and produce `evals/results.md`.
 
 **Scenarios** (`evals/scenarios.ts`): 9 synthetic workplace requests
 spanning strong, conditional, and poor AI-adoption candidates, plus
@@ -241,10 +256,10 @@ These are regex/keyword heuristics, not semantic judgment - they can
 produce false negatives if a model phrases something correct in an
 unrecognized way. Treat failures as "worth a human look," not ground
 truth. `tests/evalChecks.test.ts` unit-tests each check in isolation and
-also runs them against the harness's own fixture reports (four are
-deliberately authored to violate a specific check) to confirm the checks
-actually discriminate good reports from bad ones rather than passing
-everything.
+also runs them against the harness's own fixture reports (four pass every
+applicable check; five are deliberately authored to violate at least one)
+to confirm the checks actually discriminate good reports from bad ones
+rather than passing everything.
 
 **Runner** (`evals/runEval.ts`): for each scenario, spins up a fresh
 `createApp()` instance on its own ephemeral port (so the app's real

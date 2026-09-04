@@ -97,9 +97,23 @@ test("checkNonAiAlternativeConsidered: fails when rating stays 'strong' despite 
   assert.equal(check.status, "fail");
 });
 
-test("checkNonAiAlternativeConsidered: passes when rating is pulled down", () => {
+test("checkNonAiAlternativeConsidered: fails when rating is pulled down but the rationale doesn't name the alternative", () => {
   const scenario = scenarioWith({ obviousNonAiAlternative: true });
-  const report = reportWith({ aiSuitability: { rating: "conditional", rationale: "x" } });
+  const report = reportWith({
+    aiSuitability: { rating: "conditional", rationale: "Not enough evidence was given to size the benefit." },
+  });
+  const [check] = checkNonAiAlternativeConsidered(report, scenario);
+  assert.equal(check.status, "fail");
+});
+
+test("checkNonAiAlternativeConsidered: passes when rating is pulled down and the rationale names the alternative", () => {
+  const scenario = scenarioWith({ obviousNonAiAlternative: true });
+  const report = reportWith({
+    aiSuitability: {
+      rating: "conditional",
+      rationale: "The underlying problem is broken intranet search - fixing the search index directly is a cheaper fix than building an AI chatbot around it.",
+    },
+  });
   const [check] = checkNonAiAlternativeConsidered(report, scenario);
   assert.equal(check.status, "pass");
 });
@@ -220,6 +234,22 @@ test("checkUnsupportedRoiNotParroted: passes when the ROI figure is flagged as u
   });
   const [check] = checkUnsupportedRoiNotParroted(report, scenario);
   assert.equal(check.status, "pass");
+});
+
+test("checkUnsupportedRoiNotParroted: fails when an entry mentions ROI/savings but repeats it as fact instead of hedging it", () => {
+  const scenario = scenarioWith({ unsupportedRoiClaim: true });
+  const report = reportWith({
+    evidenceCheck: {
+      userProvidedFacts: [],
+      // Mentions "%" and "$" (the old regex's whole bar) but asserts the
+      // figures ARE true rather than flagging them as unverified - this is
+      // the exact bug the stronger check now catches.
+      assumptions: ["The 80%/$2M figures are achievable as stated"],
+      missingEvidence: [],
+    },
+  });
+  const [check] = checkUnsupportedRoiNotParroted(report, scenario);
+  assert.equal(check.status, "fail");
 });
 
 // --- Integration: canned fixture responses against the real scenarios ---

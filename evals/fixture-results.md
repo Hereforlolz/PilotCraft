@@ -1,12 +1,12 @@
 # PilotCraft evaluation results
 
-Generated: 2026-09-04T20:30:52.496Z
+Generated: 2026-09-04T22:06:47.986Z
 Mode: **fixtures** (canned responses - demonstrates the harness itself, not live Gemini quality)
 
 ## Summary
 
 - Scenarios evaluated: 9/9
-- Checks passed: 39/47 (83%)
+- Checks passed: 38/47 (81%)
 
 ## Per-scenario results
 
@@ -19,7 +19,7 @@ Mode: **fixtures** (canned responses - demonstrates the harness itself, not live
 | Poor: high-stakes legal judgment calls | poor | ✅ | 5/5 |
 | Poor: severe adoption resistance | poor | ❌ | 4/5 |
 | Sensitive data: patient intake message triage | conditional | ❌ | 5/6 |
-| Unsupported ROI claim asserted by the user | poor | ❌ | 3/6 |
+| Unsupported ROI claim asserted by the user | poor | ❌ | 2/6 |
 | Sensitive data: expense report reimbursement approval | conditional | ✅ | 6/6 |
 
 ## Pass rate by check
@@ -34,13 +34,13 @@ Mode: **fixtures** (canned responses - demonstrates the harness itself, not live
 | no-fabricated-baselines[] | 5 | 2 | 0 | 71% |
 | non-ai-alternative-considered | 0 | 1 | 8 | 0% |
 | sensitive-data-flagged | 1 | 1 | 7 | 50% |
-| unsupported-roi-not-parroted | 1 | 0 | 8 | 100% |
+| unsupported-roi-not-parroted | 0 | 1 | 8 | 0% |
 
 ## Failure patterns
 
 ### non-ai-alternative-considered
 
-- **conditional-broken-search**: Rating reflects an obvious non-AI alternative: aiSuitability.rating: "strong" (expected not "strong")
+- **conditional-broken-search**: Rating reflects an obvious non-AI alternative, named in the rationale: aiSuitability.rating: "strong" (expected not "strong"); rationale: "An AI chatbot would let employees ask questions naturally instead of using search."
 
 ### actionable-human-review[]
 
@@ -58,6 +58,10 @@ Mode: **fixtures** (canned responses - demonstrates the harness itself, not live
 ### sensitive-data-flagged
 
 - **sensitive-health-intake**: Sensitive data handling is flagged as a risk: no risk entry mentions sensitive data; risks were: Message routed to the wrong department causing a delay
+
+### unsupported-roi-not-parroted
+
+- **unsupported-roi-claim**: An unsupported ROI claim is surfaced as unverified, not treated as fact: no assumptions/missingEvidence entry both addresses the ROI claim and hedges it as unverified
 
 ### no-fabricated-baselines[]
 

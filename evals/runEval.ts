@@ -5,15 +5,19 @@
  * Runs every scenario in ./scenarios.ts through the real /api/analyze
  * pipeline (via app.ts's createApp(), same code that ships to production),
  * evaluates each report against the deterministic checks in ./checks.ts,
- * and writes results to evals/results/latest.json and evals/results.md.
+ * and writes results out:
+ *   - live mode:     evals/results/latest.json and evals/results.md
+ *   - fixtures mode:  evals/fixture-results.md (demo output only - never
+ *                      confused with real model results)
  *
  * Usage:
- *   npm run eval              # live mode - requires GEMINI_API_KEY, calls real Gemini
- *   npm run eval -- --fixtures # demo mode - canned responses, no key, no network, reproducible
- *   npm run eval -- --strict   # exit 1 if any check fails (either mode)
+ *   npm run eval                # live mode - requires GEMINI_API_KEY, calls real Gemini
+ *   npm run eval -- --fixtures  # demo mode - canned responses, no key, no network, reproducible
+ *   npm run eval -- --strict    # exit 1 if any check fails (either mode)
  *
  * See README.md's "Evaluation harness" section for details.
  */
+import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -26,12 +30,31 @@ import { CANNED_RESPONSES } from "./fixtures";
 import { runAllChecks, type CheckResult } from "./checks";
 import type { AnalysisReport } from "../src/types";
 
+dotenv.config();
+
 const args = process.argv.slice(2);
-const useFixtures = args.includes("--fixtures") || !process.env.GEMINI_API_KEY;
+const useFixtures = args.includes("--fixtures");
 const strict = args.includes("--strict");
 
-if (!args.includes("--fixtures") && !process.env.GEMINI_API_KEY) {
-  console.log("No GEMINI_API_KEY set - falling back to --fixtures (canned responses) mode.\n");
+if (!useFixtures && !process.env.GEMINI_API_KEY) {
+  console.error(
+    [
+      "GEMINI_API_KEY is not set.",
+      "",
+      "Live mode calls the real Gemini API and requires a key. Set one in a",
+      "gitignored .env file (see .env.example) or export it in your shell,",
+      "then re-run:",
+      "",
+      "  npm run eval",
+      "",
+      "To run the harness without a key instead - canned fixture responses,",
+      "no network calls, fully reproducible - use:",
+      "",
+      "  npm run eval -- --fixtures",
+      "",
+    ].join("\n")
+  );
+  process.exit(1);
 }
 
 interface ScenarioRunResult {
@@ -222,16 +245,26 @@ async function main() {
 
   const generatedAt = new Date().toISOString();
   const evalsDir = path.dirname(fileURLToPath(import.meta.url));
-  const resultsDir = path.join(evalsDir, "results");
-  mkdirSync(resultsDir, { recursive: true });
 
-  const jsonPath = path.join(resultsDir, "latest.json");
-  writeFileSync(jsonPath, JSON.stringify({ mode, generatedAt, results }, null, 2) + "\n");
+  if (useFixtures) {
+    // Fixture-mode output is a demo of the harness itself, not a report on
+    // live model quality - it gets its own file so it can never be mistaken
+    // for (or silently overwrite) real evals/results.md.
+    const mdPath = path.join(evalsDir, "fixture-results.md");
+    writeFileSync(mdPath, toMarkdown(results, mode, generatedAt));
+    console.log(`\nWrote ${path.relative(process.cwd(), mdPath)}`);
+  } else {
+    const resultsDir = path.join(evalsDir, "results");
+    mkdirSync(resultsDir, { recursive: true });
 
-  const mdPath = path.join(evalsDir, "results.md");
-  writeFileSync(mdPath, toMarkdown(results, mode, generatedAt));
+    const jsonPath = path.join(resultsDir, "latest.json");
+    writeFileSync(jsonPath, JSON.stringify({ mode, generatedAt, results }, null, 2) + "\n");
 
-  console.log(`\nWrote ${path.relative(process.cwd(), jsonPath)} and ${path.relative(process.cwd(), mdPath)}`);
+    const mdPath = path.join(evalsDir, "results.md");
+    writeFileSync(mdPath, toMarkdown(results, mode, generatedAt));
+
+    console.log(`\nWrote ${path.relative(process.cwd(), jsonPath)} and ${path.relative(process.cwd(), mdPath)}`);
+  }
 
   const totalFail = results.flatMap((r) => r.checks).filter((c) => c.status === "fail").length;
   const totalErrors = results.filter((r) => r.status === "error").length;
