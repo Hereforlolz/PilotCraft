@@ -22,10 +22,17 @@ const liveResultsJsonPath = path.join(repoRoot, "evals", "results", "latest.json
 // prior version of the fixture-mode test below unconditionally deleted
 // evals/results.md and evals/results/latest.json before running, which
 // destroyed real committed live-evaluation evidence the first time
-// someone ran `npm test` locally. Every test in this file that touches
-// them must snapshot first and restore byte-for-byte afterward, and the
-// suite-level guard below independently verifies that held.
+// someone ran `npm test` locally. Every spawned-CLI test in this file
+// must snapshot first and restore byte-for-byte afterward (including on
+// failure), and the suite-level guard below independently verifies that
+// held.
 const TRACKED_EVIDENCE_FILES = [fixtureResultsPath, liveResultsPath, liveResultsJsonPath];
+
+// A generous ceiling for a process that should fail its own argument/env
+// check before doing any work - miles below the ~86s a real 9-scenario
+// live evaluation takes, so a regression back to actually calling Gemini
+// shows up as a timing failure even if some other assertion were to miss it.
+const FAST_FAIL_CEILING_MS = 15_000;
 
 interface FileSnapshot {
   existed: boolean;
@@ -54,6 +61,34 @@ function assertFileUnchanged(filePath: string, snap: FileSnapshot, label: string
   }
 }
 
+function snapshotEvidenceFiles(): FileSnapshot[] {
+  return TRACKED_EVIDENCE_FILES.map(snapshotFile);
+}
+
+function restoreEvidenceFiles(snapshots: FileSnapshot[]) {
+  TRACKED_EVIDENCE_FILES.forEach((filePath, i) => restoreFile(filePath, snapshots[i]));
+}
+
+function assertEvidenceFilesUnchanged(snapshots: FileSnapshot[]) {
+  TRACKED_EVIDENCE_FILES.forEach((filePath, i) => {
+    assertFileUnchanged(filePath, snapshots[i], path.relative(repoRoot, filePath));
+  });
+}
+
+// Explicitly defines GEMINI_API_KEY as an empty string rather than omitting
+// it. dotenv.config() (called at the top of evals/runEval.ts) only fills in
+// a key that is *absent* from process.env - an empty string still counts as
+// "already defined" and is left alone (dotenv's `populate()` checks
+// `hasOwnProperty`, not truthiness, and only overwrites when `override:
+// true` is passed, which runEval.ts does not do). Simply deleting the key
+// from the spawned env (the previous approach) left it absent, so on a
+// developer machine with a real .env, dotenv re-populated it from disk and
+// the "no key" test silently ran the full live evaluation instead of
+// failing fast.
+function envWithBlankKey(): NodeJS.ProcessEnv {
+  return { ...process.env, GEMINI_API_KEY: "" };
+}
+
 function runCli(args: string[], env: NodeJS.ProcessEnv) {
   return spawnSync(process.execPath, ["--import", "tsx", runEvalPath, ...args], {
     cwd: repoRoot,
@@ -69,34 +104,47 @@ function runCli(args: string[], env: NodeJS.ProcessEnv) {
 let suiteSnapshots: FileSnapshot[];
 
 before(() => {
-  suiteSnapshots = TRACKED_EVIDENCE_FILES.map(snapshotFile);
+  suiteSnapshots = snapshotEvidenceFiles();
 });
 
 after(() => {
-  TRACKED_EVIDENCE_FILES.forEach((filePath, i) => {
-    assertFileUnchanged(filePath, suiteSnapshots[i], path.relative(repoRoot, filePath));
-  });
+  assertEvidenceFilesUnchanged(suiteSnapshots);
 });
 
-test("npm run eval with no GEMINI_API_KEY and no --fixtures fails clearly instead of silently using fixtures", () => {
-  const { GEMINI_API_KEY: _unused, ...envWithoutKey } = process.env;
-  const result = runCli([], envWithoutKey);
+test("npm run eval with no usable GEMINI_API_KEY and no --fixtures fails fast instead of falling back to a real .env's key", () => {
+  const snapshots = snapshotEvidenceFiles();
 
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /GEMINI_API_KEY is not set/);
-  assert.match(result.stderr, /--fixtures/);
-  // Must not have quietly run an evaluation in fixtures mode.
-  assert.doesNotMatch(result.stdout, /Running \d+ scenarios/);
+  try {
+    const startedAt = Date.now();
+    const result = runCli([], envWithBlankKey());
+    const durationMs = Date.now() - startedAt;
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /GEMINI_API_KEY is not set/);
+    assert.match(result.stderr, /--fixtures/);
+    // Must not have quietly run an evaluation - neither in fixtures mode
+    // nor (the regression this guards against) a real live run against
+    // whatever key a developer's own .env happens to define.
+    assert.doesNotMatch(result.stdout, /Running \d+ scenarios/);
+    assert.ok(
+      durationMs < FAST_FAIL_CEILING_MS,
+      `expected the missing-key check to fail fast, but it took ${durationMs}ms - ` +
+        `this is the exact symptom of dotenv re-loading a real key from .env and running the full live evaluation`
+    );
+
+    // A real live run would create/modify these; a fast-fail must not.
+    assertEvidenceFilesUnchanged(snapshots);
+  } finally {
+    restoreEvidenceFiles(snapshots);
+  }
 });
 
-test("npm run eval -- --fixtures runs without a key, writes fixture-mode content, and leaves tracked evidence files exactly as they were", () => {
-  const { GEMINI_API_KEY: _unused, ...envWithoutKey } = process.env;
-
-  const snapshots = TRACKED_EVIDENCE_FILES.map(snapshotFile);
+test("npm run eval -- --fixtures runs without a usable key, writes fixture-mode content, and leaves tracked evidence files exactly as they were", () => {
+  const snapshots = snapshotEvidenceFiles();
   const [fixtureSnap, liveMdSnap, liveJsonSnap] = snapshots;
 
   try {
-    const result = runCli(["--fixtures"], envWithoutKey);
+    const result = runCli(["--fixtures"], envWithBlankKey());
 
     assert.equal(result.status, 0, result.stderr);
     assert.ok(existsSync(fixtureResultsPath), "expected evals/fixture-results.md to be written");
