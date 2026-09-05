@@ -392,6 +392,9 @@ in future model runs.
   range (moderate severity, and low actual exposure here since the app
   never parses query-string arrays). The project now runs Express 5,
   which resolves a patched `qs` version.
+- **Reports can misstate the input.** Generated reports can misstate or
+  omit details supplied in the input. Users must compare the Evidence
+  Check and recommendations against the original scenario before acting.
 
 ## Screenshot
 
@@ -401,13 +404,8 @@ The input screen, captured from a locally running build. There is
 currently no public deployment of this app — no live-demo link is included
 because none exists to link to.
 
-There is no screenshot of a generated report here yet. A candidate report
-was reviewed for this update but wasn't used: it altered a fact supplied
-in its own input (reporting a "10-person" company for a scenario that
-specified 180 people), so publishing it would misrepresent what the tool
-actually does with evidence discipline. A verified report screenshot —
-generated from a real Gemini call, checked against its own input for
-fidelity — is still pending.
+There is no screenshot of a generated report here yet — a verified one,
+checked against its own input for fidelity, is still pending.
 
 ## AI-assistance disclosure
 
