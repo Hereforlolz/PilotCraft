@@ -264,16 +264,16 @@ mode is opt-in only, via the explicit `--fixtures` flag.
 The two modes write to different files so they can never be confused:
 
 - **Live mode** writes `evals/results.md` and `evals/results/latest.json`
-  — these are reserved for actual Gemini output and are only present once
-  someone has run the harness with a real key.
+  — reserved for actual Gemini output. The versions checked into this repo
+  are from a real run against the live API (see "Live evaluation evidence"
+  below); re-running `npm run eval` locally with your own key overwrites
+  them with your own results.
 - **Fixture mode** writes `evals/fixture-results.md` — a demo of the
   harness itself (does the checks correctly separate compliant reports
-  from violating ones), not a report on live Gemini quality. **The
-  `evals/fixture-results.md` checked into this repo was generated this
-  way**, since this environment doesn't have a `GEMINI_API_KEY`. Run in
-  live mode locally (with your own key in a gitignored `.env` — never
-  paste an API key into chat or commit it) to evaluate real model
-  behavior and produce `evals/results.md`.
+  from violating ones), not a report on live Gemini quality. Useful for
+  reviewing or extending the checks without spending API calls, and
+  without needing a `GEMINI_API_KEY` at all (never paste an API key into
+  chat or commit it — keep it in a gitignored `.env`).
 
 **Scenarios** (`evals/scenarios.ts`): 9 synthetic workplace requests
 spanning strong, conditional, and poor AI-adoption candidates, plus
@@ -323,6 +323,37 @@ machine-readable `evals/results/latest.json` and a human-readable
 `evals/results.md` (pass rates per scenario and per check, plus the
 specific detail of every failure).
 
+### Live evaluation evidence
+
+Generated September 4, 2026, against the live Gemini API (primary
+`gemini-3.8-flash`, with `gemini-3.1-flash-lite` as the automatic
+fallback on a retryable failure) — not fixtures. All 9 synthetic
+scenarios completed with no scenario errors, and all 58 applicable
+deterministic checks passed (58/58).
+
+Across the 9 scenarios, this run demonstrated:
+
+- no fabricated baselines when a scenario gave none
+- at least one concrete missing-evidence gap named in every report
+- suitability ratings and 0–100 readiness scores calibrated to each
+  scenario's actual evidence
+- an actionable, specific human-review step for every identified risk
+- an explicit non-AI alternative named where one obviously existed
+- sensitive-data handling (health, financial) flagged as a risk with a
+  concrete safeguard
+- an unsupported ROI claim asserted by the user recorded and flagged as
+  unverified, not treated as fact
+
+Full detail: [`evals/results.md`](./evals/results.md) (human-readable) and
+[`evals/results/latest.json`](./evals/results/latest.json)
+(machine-readable, per-check detail for every scenario).
+
+**Limitation:** this was one live model run over nine synthetic scenarios
+using deterministic heuristic checks. It demonstrates tested behavior
+under those conditions; it does not establish statistical reliability,
+validate outcomes in a real organization, or guarantee identical behavior
+in future model runs.
+
 ## Privacy and data handling
 
 - Scenario text you type **is sent to Google's Gemini API** to generate the
@@ -361,16 +392,20 @@ specific detail of every failure).
   range (moderate severity, and low actual exposure here since the app
   never parses query-string arrays). The project now runs Express 5,
   which resolves a patched `qs` version.
+- **Reports can misstate the input.** Generated reports can misstate or
+  omit details supplied in the input. Users must compare the Evidence
+  Check and recommendations against the original scenario before acting.
 
 ## Screenshot
 
 ![PilotCraft landing page](./screenshots/landing-page.png)
 
-The input screen, captured from a locally running build. There is no
-screenshot of a generated report here: doing so honestly requires a live
-Gemini API call, and one wasn't available when this was written. There is
+The input screen, captured from a locally running build. There is
 currently no public deployment of this app — no live-demo link is included
 because none exists to link to.
+
+There is no screenshot of a generated report here yet — a verified one,
+checked against its own input for fidelity, is still pending.
 
 ## AI-assistance disclosure
 
