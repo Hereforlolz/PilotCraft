@@ -105,10 +105,26 @@ The commit history shows real defects that review caught:
 
 ## 9. How I built it
 
-[Your words. What you specified and decided (for example the evidence discipline,
-the option to recommend against AI, the eval checks), what an AI coding assistant
-wrote, and one thing that surprised you. The README discloses that the code was
-built with Claude Code, directed and reviewed by you.]
+The first version came out of Google AI Studio. That is where I tried the idea and
+ran the Gemini models, and the repo still carries AI Studio's app metadata. The
+git history starts on 2 September 2026 with that version, in commits under my name.
+
+Most of what followed was hardening, done with an AI coding assistant (Claude
+Code) in review rounds that I directed and merged through pull requests. Roughly
+half of the commits are authored by the assistant. That work covers:
+
+- abuse protection on the endpoint
+- report truthfulness
+- request-cancellation and JSON-repair bugs
+- the test suite and CI
+- the evaluation harness
+- the Express 5 upgrade
+
+I don't have a record of each individual design decision, so I won't claim
+credit for specific ones here. What the repo does show is the shape of the
+process: a quick prototype, then repeated review that found real defects, each
+fixed in a small pull request with tests. The README discloses the assistance so
+anyone judging the project knows how it was made.
 
 ## 10. If this were used for real
 
