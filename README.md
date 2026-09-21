@@ -348,6 +348,13 @@ Full detail: [`evals/results.md`](./evals/results.md) (human-readable) and
 [`evals/results/latest.json`](./evals/results/latest.json)
 (machine-readable, per-check detail for every scenario).
 
+**Which model answered:** the model IDs above were run by the author in Google
+AI Studio. This September 4 run predates per-scenario model recording, so its
+results do not say whether the primary or the fallback model produced each
+report. From now on, `npm run eval` records this: `evals/results/latest.json`
+gets `answeredBy` and `modelsCalled` for each scenario, and `evals/results.md`
+gets an "Answered by" column.
+
 **Limitation:** this was one live model run over nine synthetic scenarios
 using deterministic heuristic checks. It demonstrates tested behavior
 under those conditions; it does not establish statistical reliability,
