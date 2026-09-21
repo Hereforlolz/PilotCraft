@@ -63,6 +63,10 @@ interface ScenarioRunResult {
   category: EvalScenario["category"];
   status: "evaluated" | "error";
   errorMessage?: string;
+  /** Model that produced the accepted response (last successful call). Live mode only. */
+  answeredBy?: string;
+  /** Every model the pipeline called for this scenario, in order (includes failed attempts and repairs). */
+  modelsCalled?: string[];
   checks: CheckResult[];
 }
 
@@ -82,7 +86,18 @@ function makeLiveGenerateContent(): GenerateContentFn {
 }
 
 async function runScenario(scenario: EvalScenario): Promise<ScenarioRunResult> {
-  const generateContent = useFixtures ? makeFixtureGenerateContent(scenario.id) : makeLiveGenerateContent();
+  const baseGenerateContent = useFixtures ? makeFixtureGenerateContent(scenario.id) : makeLiveGenerateContent();
+  // Record which model the pipeline actually used, so a result can be traced
+  // to the primary or the fallback model rather than just "live".
+  const modelsCalled: string[] = [];
+  let answeredBy: string | undefined;
+  const generateContent: GenerateContentFn = async (params) => {
+    const model = (params as { model?: string }).model ?? "unknown";
+    modelsCalled.push(model);
+    const response = await baseGenerateContent(params);
+    answeredBy = model;
+    return response;
+  };
   const app = createApp({ generateContent });
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>((resolve) => server.once("listening", resolve));
@@ -128,7 +143,7 @@ async function runScenario(scenario: EvalScenario): Promise<ScenarioRunResult> {
       return { id: scenario.id, title: scenario.title, category: scenario.category, status: "error", errorMessage: errorMessage ?? "No result event received", checks: [] };
     }
 
-    return { id: scenario.id, title: scenario.title, category: scenario.category, status: "evaluated", checks: runAllChecks(report, scenario) };
+    return { id: scenario.id, title: scenario.title, category: scenario.category, status: "evaluated", ...(useFixtures ? {} : { answeredBy, modelsCalled }), checks: runAllChecks(report, scenario) };
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
@@ -169,17 +184,18 @@ function toMarkdown(results: ScenarioRunResult[], mode: string, generatedAt: str
 
   lines.push("## Per-scenario results");
   lines.push("");
-  lines.push("| Scenario | Category | Status | Checks passed |");
-  lines.push("|---|---|---|---|");
+  const showModel = results.some((r) => r.answeredBy);
+  lines.push(showModel ? "| Scenario | Category | Status | Checks passed | Answered by |" : "| Scenario | Category | Status | Checks passed |");
+  lines.push(showModel ? "|---|---|---|---|---|" : "|---|---|---|---|");
   for (const r of results) {
     if (r.status === "error") {
-      lines.push(`| ${r.title} | ${r.category} | ⚠️ error | - |`);
+      lines.push(`| ${r.title} | ${r.category} | ⚠️ error | -${showModel ? " | -" : ""} |`);
       continue;
     }
     const applicable = r.checks.filter((c) => c.status !== "skipped");
     const passed = applicable.filter((c) => c.status === "pass").length;
     const marker = passed === applicable.length ? "✅" : "❌";
-    lines.push(`| ${r.title} | ${r.category} | ${marker} | ${passed}/${applicable.length} |`);
+    lines.push(`| ${r.title} | ${r.category} | ${marker} | ${passed}/${applicable.length}${showModel ? ` | ${r.answeredBy ?? "-"}` : ""} |`);
   }
   lines.push("");
 
