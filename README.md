@@ -7,6 +7,8 @@ PilotCraft turns a plain-language description of a workplace problem into a
 structured, evidence-checked assessment of whether — and how — to pilot AI
 on it, rather than a "yes, use AI" recommendation.
 
+**Read first:** [Case study](docs/case-study.md)
+
 ## The problem it addresses
 
 Teams considering AI adoption often skip straight to "let's build an AI
