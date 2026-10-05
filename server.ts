@@ -19,10 +19,23 @@ const ai = new GoogleGenAI({
   }
 });
 
+const apiKeyConfigured = Boolean(process.env.GEMINI_API_KEY) && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY";
+if (!apiKeyConfigured) {
+  console.warn("WARNING: GEMINI_API_KEY is not set (or is still the .env.example placeholder). Analyses will fail until it is.");
+}
+
+const numberFromEnv = (name: string): number | undefined => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+};
+
 const app = createApp({
   generateContent: (params) => ai.models.generateContent(params),
-  primaryModelId: DEFAULT_PRIMARY_MODEL_ID,
-  fallbackModelId: DEFAULT_FALLBACK_MODEL_ID,
+  primaryModelId: process.env.GEMINI_PRIMARY_MODEL || DEFAULT_PRIMARY_MODEL_ID,
+  fallbackModelId: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL_ID,
+  apiKeyConfigured,
+  perAttemptTimeoutMs: numberFromEnv("GEMINI_ATTEMPT_TIMEOUT_MS"),
+  totalTimeoutMs: numberFromEnv("GEMINI_TOTAL_TIMEOUT_MS"),
 });
 
 async function startServer() {

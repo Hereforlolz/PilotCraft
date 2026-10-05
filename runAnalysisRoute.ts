@@ -1,4 +1,5 @@
 import { isRetryable } from "./retry";
+import { classifyFailure } from "./geminiErrors";
 import { validateOrRepair, type RequestRepair } from "./analysisRepair";
 import { abortOnPrematureClose, type CloseableResponse } from "./abortOnClose";
 import type { ValidatedAnalysisReport } from "./validation";
@@ -37,6 +38,13 @@ export interface RunAnalysisRouteOptions {
 }
 
 const UNAVAILABLE_MESSAGE = "Gemini is temporarily unavailable. Your information is preserved—please try again shortly.";
+
+/** Thrown to the outer catch when the failure should be reported verbatim. */
+class ReportableFailure extends Error {
+  constructor(message: string, readonly code: string) {
+    super(message);
+  }
+}
 
 /**
  * Runs the primary/fallback Gemini analysis dance for one request and pushes
@@ -132,7 +140,7 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
 
   const totalTimeoutId = setTimeout(() => {
     currentAbortController?.abort();
-    sendEvent("error", { message: UNAVAILABLE_MESSAGE });
+    sendEvent("error", { message: UNAVAILABLE_MESSAGE, code: "timeout" });
   }, totalTimeoutMs);
 
   try {
@@ -145,7 +153,9 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
     } catch (error: any) {
       logModelUsage(primaryModelId, "failure");
 
-      if (isRetryable(error)) {
+      // A model ID this key can't see (404) is a config problem the fallback
+      // model can still rescue, so treat it like a transient failure here.
+      if (isRetryable(error) || classifyFailure(error).code === "model_not_found") {
         // The client is gone - a second model call would just be spent
         // computing a report nobody will ever read.
         if (clientDisconnected || res.destroyed) {
@@ -168,11 +178,17 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
         } catch (fallbackError: any) {
           logModelUsage(fallbackModelId, "failure");
           console.error(`Fallback model (${fallbackModelId}) failed:`, fallbackError);
-          throw new Error(UNAVAILABLE_MESSAGE);
+          // Both models failed: tell the user the *fallback's* diagnosis
+          // (the more recent one) instead of one generic sentence. If the
+          // primary failure was a config problem, prefer that.
+          const primary = classifyFailure(error);
+          const diagnosed = ["missing_key", "model_not_found"].includes(primary.code) ? primary : classifyFailure(fallbackError);
+          throw new ReportableFailure(diagnosed.message, diagnosed.code);
         }
       } else {
         console.error(`Primary model (${primaryModelId}) failed with non-retryable error:`, error);
-        throw error;
+        const diagnosed = classifyFailure(error);
+        throw new ReportableFailure(diagnosed.message, diagnosed.code);
       }
     }
 
@@ -181,10 +197,8 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
     }
   } catch (error: any) {
     console.error("Analysis Error:", error);
-    const message = error.message?.includes("preserved")
-      ? error.message
-      : "The analysis engine encountered an issue. Please refine your scenario or try again in a few moments.";
-    sendEvent("error", { message });
+    const failure = error instanceof ReportableFailure ? error : classifyFailure(error);
+    sendEvent("error", { message: failure.message, code: failure.code });
   } finally {
     clearTimeout(totalTimeoutId);
   }

@@ -6,6 +6,37 @@ interface ReportDisplayProps {
   report: AnalysisReport;
 }
 
+const SECTIONS = [
+  { id: 'assessment', label: 'Assessment' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'workflow', label: 'Workflow' },
+  { id: 'risks', label: 'Risks' },
+  { id: 'adoption', label: 'Adoption' },
+  { id: 'pilot', label: 'Pilot & metrics' },
+  { id: 'decision', label: 'Go / no-go' },
+];
+
+/** A bulleted list that shows a fallback line instead of rendering nothing. */
+function BulletList({ items, empty }: { items: string[]; empty: string }) {
+  if (items.length === 0) return <p className="text-sm text-slate-500">{empty}</p>;
+  return (
+    <ul className="space-y-1.5">
+      {items.map((item, i) => (
+        <li key={i} className="text-sm text-slate-700 flex items-start gap-2 leading-relaxed">
+          <span className="mt-2 w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const IMPACT_COLORS: Record<string, string> = {
+  high: 'text-rose-700 bg-rose-50 border-rose-100',
+  medium: 'text-amber-700 bg-amber-50 border-amber-100',
+  low: 'text-emerald-700 bg-emerald-50 border-emerald-100',
+};
+
 export function ReportDisplay({ report }: ReportDisplayProps) {
   const getRatingIcon = (rating: string) => {
     switch (rating) {
@@ -31,8 +62,20 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
+      <nav aria-label="Report sections" className="flex flex-wrap gap-2 print:hidden">
+        {SECTIONS.map((sec) => (
+          <a
+            key={sec.id}
+            href={`#${sec.id}`}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-700 transition-colors"
+          >
+            {sec.label}
+          </a>
+        ))}
+      </nav>
+
       {/* Executive Summary & Readiness */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section id="assessment" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
@@ -58,7 +101,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
               <Activity className="w-4 h-4" />
               <span className="text-sm font-medium uppercase tracking-wider">Readiness Score</span>
             </div>
-            <p className="text-[10px] text-indigo-200 uppercase tracking-wide mb-2">Planning heuristic&mdash;not an objective measurement.</p>
+            <p className="text-xs text-indigo-100 mb-2">Planning heuristic&mdash;not an objective measurement.</p>
             <div className="text-6xl font-bold mb-4">{report.readinessScore.score}%</div>
             <p className="text-indigo-100 text-sm leading-relaxed italic">
               "{report.readinessScore.explanation}"
@@ -69,7 +112,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
               <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200 mb-2">Priority Gaps</p>
               <ul className="space-y-1">
                 {report.readinessScore.factorsReducingScore.slice(0, 3).map((f, i) => (
-                  <li key={i} className="text-xs text-indigo-100 flex items-start gap-2">
+                  <li key={i} className="text-sm text-indigo-50 flex items-start gap-2">
                     <span className="mt-1 w-1 h-1 bg-indigo-300 rounded-full shrink-0" />
                     {f}
                   </li>
@@ -81,7 +124,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
       </section>
 
       {/* Clarifying Questions & Evidence */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section id="evidence" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
@@ -105,25 +148,25 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             </div>
             <h3 className="text-lg font-semibold text-slate-900">Evidence Check</h3>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">User-Provided Facts</p>
-              <p className="text-sm text-slate-600">{report.evidenceCheck.userProvidedFacts.join(", ") || "No facts extracted from the scenario."}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">User-Provided Facts</p>
+              <BulletList items={report.evidenceCheck.userProvidedFacts} empty="No facts extracted from the scenario." />
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Assumptions</p>
-              <p className="text-sm text-slate-600">{report.evidenceCheck.assumptions.join(", ") || "No major assumptions identified."}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Assumptions</p>
+              <BulletList items={report.evidenceCheck.assumptions} empty="No major assumptions identified." />
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Missing Evidence</p>
-              <p className="text-sm text-slate-600">{report.evidenceCheck.missingEvidence.join(", ") || "Information complete."}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Missing Evidence</p>
+              <BulletList items={report.evidenceCheck.missingEvidence} empty="Information complete." />
             </div>
           </div>
         </div>
       </section>
 
       {/* Workflow & Responsibilities */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <section id="workflow" className="scroll-mt-24 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center gap-3">
           <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
             <Rocket className="w-5 h-5" />
@@ -162,7 +205,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Stays With Humans</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Stays With Humans</p>
             <ul className="space-y-2">
               {report.responsibilitySplit.human.map((item, i) => (
                 <li key={i} className="text-sm text-slate-600 flex items-start gap-2 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
@@ -173,7 +216,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             </ul>
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Handled By AI</p>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Handled By AI</p>
             <ul className="space-y-2">
               {report.responsibilitySplit.ai.map((item, i) => (
                 <li key={i} className="text-sm text-indigo-900 flex items-start gap-2 bg-indigo-50 rounded-lg p-2.5 border border-indigo-100">
@@ -187,7 +230,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
       </section>
 
       {/* Risks & Stakeholders */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section id="risks" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-rose-50 rounded-lg text-rose-600">
@@ -202,9 +245,9 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
                   <h4 className="text-sm font-bold text-slate-900">{r.risk}</h4>
                   {getSeverityBadge(r.severity)}
                 </div>
-                <p className="text-xs text-slate-500 mb-2 italic">Review: {r.humanReview}</p>
+                <p className="text-sm text-slate-600 mb-2"><span className="font-semibold text-slate-700">Human review:</span> {r.humanReview}</p>
                 <div className="bg-rose-50/50 p-2 rounded-lg border border-rose-100/50">
-                  <p className="text-xs text-rose-700 font-medium">Safeguard: {r.safeguard}</p>
+                  <p className="text-sm text-rose-800"><span className="font-semibold">Safeguard:</span> {r.safeguard}</p>
                 </div>
               </div>
             ))}
@@ -220,15 +263,14 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
           </div>
           <div className="space-y-4">
             {report.stakeholders.map((s, i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div key={i} className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
                   <p className="text-sm font-bold text-slate-900">{s.role}</p>
-                  <p className="text-xs text-slate-500">{s.involvement}</p>
+                  <p className="text-sm text-slate-600">{s.involvement}</p>
                 </div>
-                <div className="text-right">
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-widest block mb-0.5">Impact</span>
-                  <p className="text-xs font-bold text-cyan-600 uppercase">{s.impact}</p>
-                </div>
+                <span className={`shrink-0 px-2.5 py-1 rounded-full border text-xs font-semibold uppercase tracking-wider ${IMPACT_COLORS[s.impact.toLowerCase()] ?? 'text-slate-600 bg-slate-100 border-slate-200'}`}>
+                  {s.impact} impact
+                </span>
               </div>
             ))}
           </div>
@@ -236,7 +278,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
       </section>
 
       {/* Adoption Barriers & Training */}
-      <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <section id="adoption" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
@@ -248,7 +290,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             {report.adoptionBarriers.map((b, i) => (
               <div key={i} className="relative pl-4 border-l-2 border-slate-100">
                 <p className="text-sm font-bold text-slate-900 mb-1">{b.barrier}</p>
-                <p className="text-xs text-slate-500">Mitigation: {b.mitigation}</p>
+                <p className="text-sm text-slate-600"><span className="font-semibold text-slate-700">Mitigation:</span> {b.mitigation}</p>
               </div>
             ))}
           </div>
@@ -263,7 +305,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
           </div>
           <div className="space-y-4">
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Training Actions</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Training Actions</p>
               <ul className="space-y-1.5">
                 {report.trainingAndCommunication.trainingActions.map((a, i) => (
                   <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
@@ -274,7 +316,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
               </ul>
             </div>
             <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Communication Actions</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Communication Actions</p>
               <ul className="space-y-1.5">
                 {report.trainingAndCommunication.communicationActions.map((a, i) => (
                   <li key={i} className="text-sm text-slate-600 flex items-start gap-2">
@@ -289,7 +331,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
       </section>
 
       {/* Pilot Plan & Metrics */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section id="pilot" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-emerald-50 rounded-lg text-emerald-600">
@@ -301,21 +343,21 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             {report.pilotPlan.map((p, i) => (
               <div key={i} className="relative pl-10">
                 <div className="absolute left-0 top-1 w-6 h-6 bg-white border-2 border-emerald-500 rounded-full flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-emerald-600">{i + 1}</span>
+                  <span className="text-xs font-bold text-emerald-600">{i + 1}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
                   <h4 className="text-sm font-bold text-slate-900">{p.period}</h4>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded">Owner: {p.suggestedOwner}</span>
+                  <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">Owner: {p.suggestedOwner}</span>
                 </div>
                 <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 mb-3">
                   {p.actions.map((a, j) => (
-                    <li key={j} className="text-xs text-slate-600 flex items-start gap-2">
-                      <CheckCircle2 className="w-3 h-3 mt-0.5 text-emerald-400 shrink-0" />
+                    <li key={j} className="text-sm text-slate-700 flex items-start gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 mt-1 text-emerald-400 shrink-0" />
                       {a}
                     </li>
                   ))}
                 </ul>
-                <p className="text-[10px] text-slate-400 italic">Collect: {p.evidenceToCollect.join(", ")}</p>
+                <p className="text-xs text-slate-500"><span className="font-semibold">Evidence to collect:</span> {p.evidenceToCollect.join("; ")}</p>
               </div>
             ))}
           </div>
@@ -331,18 +373,18 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
           <div className="space-y-6">
             {report.successMetrics.map((m, i) => (
               <div key={i} className="space-y-2">
-                <p className="text-xs font-bold text-indigo-300 uppercase tracking-widest">{m.metric}</p>
+                <p className="text-sm font-bold text-indigo-200">{m.metric}</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white/5 p-2 rounded-lg">
-                    <p className="text-[10px] text-slate-400 uppercase">Baseline</p>
+                    <p className="text-xs text-slate-300 uppercase">Baseline</p>
                     <p className="text-sm font-bold">{m.baseline}</p>
                   </div>
                   <div className="bg-indigo-500/20 p-2 rounded-lg border border-indigo-500/30">
-                    <p className="text-[10px] text-indigo-300 uppercase">Target</p>
+                    <p className="text-xs text-indigo-200 uppercase">Target</p>
                     <p className="text-sm font-bold text-indigo-100">{m.proposedTarget}</p>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-400 italic">Collection method: {m.collectionMethod}</p>
+                <p className="text-xs text-slate-300"><span className="font-semibold">How to measure:</span> {m.collectionMethod}</p>
               </div>
             ))}
           </div>
@@ -350,7 +392,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
       </section>
 
       {/* Decision Criteria */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <section id="decision" className="scroll-mt-24 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-slate-100 rounded-lg text-slate-600">
             <Milestone className="w-5 h-5" />
@@ -362,7 +404,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             <p className="text-xs font-bold text-rose-700 uppercase tracking-widest mb-2">Stop</p>
             <ul className="space-y-1.5">
               {report.decisionCriteria.stop.map((c, i) => (
-                <li key={i} className="text-sm text-rose-900">{c}</li>
+                <li key={i} className="text-sm text-rose-900 flex items-start gap-2"><span className="mt-2 w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />{c}</li>
               ))}
             </ul>
           </div>
@@ -370,7 +412,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             <p className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-2">Revise</p>
             <ul className="space-y-1.5">
               {report.decisionCriteria.revise.map((c, i) => (
-                <li key={i} className="text-sm text-amber-900">{c}</li>
+                <li key={i} className="text-sm text-amber-900 flex items-start gap-2"><span className="mt-2 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />{c}</li>
               ))}
             </ul>
           </div>
@@ -378,7 +420,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             <p className="text-xs font-bold text-emerald-700 uppercase tracking-widest mb-2">Scale</p>
             <ul className="space-y-1.5">
               {report.decisionCriteria.scale.map((c, i) => (
-                <li key={i} className="text-sm text-emerald-900">{c}</li>
+                <li key={i} className="text-sm text-emerald-900 flex items-start gap-2"><span className="mt-2 w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />{c}</li>
               ))}
             </ul>
           </div>

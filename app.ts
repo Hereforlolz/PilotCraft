@@ -175,6 +175,11 @@ export interface CreateAppOptions {
   generateContent: GenerateContentFn;
   primaryModelId?: string;
   fallbackModelId?: string;
+  /** Whether a Gemini API key was found at startup (reported by /api/health). */
+  apiKeyConfigured?: boolean;
+  /** Overridable so a slow model doesn't need a code change. */
+  perAttemptTimeoutMs?: number;
+  totalTimeoutMs?: number;
 }
 
 /**
@@ -188,6 +193,9 @@ export function createApp(options: CreateAppOptions): Express {
     generateContent,
     primaryModelId = DEFAULT_PRIMARY_MODEL_ID,
     fallbackModelId = DEFAULT_FALLBACK_MODEL_ID,
+    apiKeyConfigured = true,
+    perAttemptTimeoutMs = 40000,
+    totalTimeoutMs = 90000,
   } = options;
 
   const app = express();
@@ -232,6 +240,12 @@ export function createApp(options: CreateAppOptions): Express {
     }
   }, RATE_LIMIT_WINDOW_MS).unref();
 
+  // Cheap pre-flight check (no Gemini call, no rate limit): run
+  // `curl localhost:3000/api/health` before a demo to catch a missing key.
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: apiKeyConfigured, apiKeyConfigured, primaryModelId, fallbackModelId });
+  });
+
   app.post("/api/analyze", async (req, res) => {
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
     if (isRateLimited(clientIp)) {
@@ -265,8 +279,8 @@ export function createApp(options: CreateAppOptions): Express {
         scenario,
         primaryModelId,
         fallbackModelId,
-        perAttemptTimeoutMs: 25000,
-        totalTimeoutMs: 55000,
+        perAttemptTimeoutMs,
+        totalTimeoutMs,
         systemInstruction: SYSTEM_INSTRUCTION,
         responseSchema,
         // Note: per the SDK's own docs, aborting is a client-only operation -
