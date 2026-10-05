@@ -30,6 +30,12 @@ export interface RunAnalysisRouteOptions {
    * spikes settle. Defaults to 1000ms; overridable so tests don't have to
    * actually wait a second. */
   fallbackDelayMs?: number;
+  /** Extra last-resort models tried, in order, after the fallback model. */
+  extraModelIds?: string[];
+  /** Extra attempts on the *same* model after a 429/503, before moving on. */
+  sameModelRetries?: number;
+  /** Base backoff between same-model retries (multiplied by attempt number). */
+  retryDelayMs?: number;
   systemInstruction: string;
   responseSchema: unknown;
   generateContent: GenerateContentFn;
@@ -60,6 +66,9 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
     perAttemptTimeoutMs,
     totalTimeoutMs,
     fallbackDelayMs = 1000,
+    extraModelIds = [],
+    sameModelRetries = 0,
+    retryDelayMs = 1500,
     systemInstruction,
     responseSchema,
     generateContent,
@@ -143,58 +152,72 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
     sendEvent("error", { message: UNAVAILABLE_MESSAGE, code: "timeout" });
   }, totalTimeoutMs);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const clientGone = () => clientDisconnected || res.destroyed;
+  const modelChain = [primaryModelId, fallbackModelId, ...extraModelIds];
+
   try {
     let result: ValidatedAnalysisReport | null = null;
+    let configFailure: ReturnType<typeof classifyFailure> | null = null;
+    let lastError: unknown;
 
-    try {
-      sendEvent("status", "Analyzing scenario with primary engine...");
-      result = await runModel(primaryModelId, perAttemptTimeoutMs);
-      logModelUsage(primaryModelId, "success");
-    } catch (error: any) {
-      logModelUsage(primaryModelId, "failure");
+    chain: for (let i = 0; i < modelChain.length; i++) {
+      const modelId = modelChain[i];
 
-      // A model ID this key can't see (404) is a config problem the fallback
-      // model can still rescue, so treat it like a transient failure here.
-      if (isRetryable(error) || classifyFailure(error).code === "model_not_found") {
-        // The client is gone - a second model call would just be spent
-        // computing a report nobody will ever read.
-        if (clientDisconnected || res.destroyed) {
-          return;
-        }
-
-        sendEvent("status", "The primary model is unavailable. Trying the backup model…");
-
-        // Small delay to let transient capacity spikes settle. The client
-        // can disconnect during this window, so re-check before spending a
-        // second model call on a request nobody's listening for anymore.
-        await new Promise((resolve) => setTimeout(resolve, fallbackDelayMs));
-        if (clientDisconnected || res.destroyed) {
-          return;
-        }
-
-        try {
-          result = await runModel(fallbackModelId, perAttemptTimeoutMs);
-          logModelUsage(fallbackModelId, "success");
-        } catch (fallbackError: any) {
-          logModelUsage(fallbackModelId, "failure");
-          console.error(`Fallback model (${fallbackModelId}) failed:`, fallbackError);
-          // Both models failed: tell the user the *fallback's* diagnosis
-          // (the more recent one) instead of one generic sentence. If the
-          // primary failure was a config problem, prefer that.
-          const primary = classifyFailure(error);
-          const diagnosed = ["missing_key", "model_not_found"].includes(primary.code) ? primary : classifyFailure(fallbackError);
-          throw new ReportableFailure(diagnosed.message, diagnosed.code);
-        }
+      if (i === 0) {
+        sendEvent("status", "Analyzing scenario with primary engine...");
       } else {
-        console.error(`Primary model (${primaryModelId}) failed with non-retryable error:`, error);
-        const diagnosed = classifyFailure(error);
-        throw new ReportableFailure(diagnosed.message, diagnosed.code);
+        // The client can disconnect while we wait, and a model call for
+        // someone who left is wasted spend - so check before every hop.
+        if (clientGone()) return;
+        sendEvent("status", i === 1 ? "The primary model is unavailable. Trying the backup model…" : "Backup model also unavailable. Trying one last model…");
+        await sleep(fallbackDelayMs);
+        if (clientGone()) return;
+      }
+
+      for (let attempt = 0; attempt <= sameModelRetries; attempt++) {
+        try {
+          result = await runModel(modelId, perAttemptTimeoutMs);
+          logModelUsage(modelId, "success");
+          break chain;
+        } catch (error: any) {
+          logModelUsage(modelId, "failure");
+          lastError = error;
+          const failure = classifyFailure(error);
+          if (failure.code === "missing_key" || failure.code === "model_not_found") configFailure ??= failure;
+
+          // A model ID this key can't see (404) is a config problem a later
+          // model can still rescue, so it counts as moving-on material.
+          const canMoveOn = isRetryable(error) || failure.code === "model_not_found";
+          if (!canMoveOn) {
+            if (i === 0) {
+              console.error(`Primary model (${modelId}) failed with non-retryable error:`, error);
+              throw new ReportableFailure(failure.message, failure.code);
+            }
+            break; // a later model's odd error: just try the next one
+          }
+
+          console.error(`Model ${modelId} failed (attempt ${attempt + 1}):`, error);
+          // Only brief capacity blips are worth retrying on the same model;
+          // a timeout already burned its whole budget, and a bad key or
+          // model ID won't fix itself.
+          const worthRetrying = failure.code === "overloaded" || failure.code === "quota";
+          if (!worthRetrying || attempt >= sameModelRetries) break;
+          if (clientGone()) return;
+          sendEvent("status", "Gemini is busy. Retrying…");
+          await sleep(retryDelayMs * (attempt + 1));
+          if (clientGone()) return;
+        }
       }
     }
 
-    if (result) {
-      sendEvent("result", result);
+    if (!result) {
+      // Every model failed. A config problem (bad key / unknown model) is
+      // more useful to report than whichever transient error came last.
+      const diagnosed = configFailure ?? classifyFailure(lastError);
+      throw new ReportableFailure(diagnosed.message, diagnosed.code);
     }
+    sendEvent("result", result);
   } catch (error: any) {
     console.error("Analysis Error:", error);
     const failure = error instanceof ReportableFailure ? error : classifyFailure(error);

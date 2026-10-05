@@ -103,9 +103,12 @@ on what a human should *not* accept blindly from it.
 flowchart TD
     A["User scenario (React UI)"] --> B["Express POST /api/analyze"]
     B --> C["Primary: Gemini 3.8 Flash"]
-    C -->|"retryable failure (429/5xx/timeout)"| F["Fallback: Gemini 3.1 Flash-Lite"]
+    C -->|"429/503: one retry"| C
+    C -->|"still failing"| F["Fallback: Gemini 3.1 Flash-Lite"]
+    F -->|"still failing"| L["Last resort: Gemini 2.5 Flash"]
     C --> D["Validate + one same-model repair"]
     F --> D
+    L --> D
     D --> V["Validated report"]
     V --> S["SSE stream"]
     S --> U["Browser displays report"]
@@ -132,13 +135,20 @@ print to PDF.
   `responseSchema` for structured output. Current configuration
   (`app.ts`):
   - Primary model: `gemini-3.8-flash`
-  - Fallback model: `gemini-3.1-flash-lite`, tried automatically if the
-    primary fails with a retryable error (429/500/502/503/504, a timeout,
-    or a schema-validation failure that survives one repair attempt) — after
-    a 1-second delay to let transient capacity spikes settle, with the
-    client-disconnect check re-run after that delay so a client that left
-    during it doesn't still get a wasted fallback call
-  - Per-attempt timeout: 25 seconds; overall request timeout: 55 seconds
+  - On a 429/503 the same model is retried once after a short backoff,
+    since those are usually brief capacity blips
+  - Fallback model: `gemini-3.1-flash-lite`, tried if the primary still
+    fails with a retryable error (429/500/502/503/504, a timeout, an
+    unknown model ID, or a schema-validation failure that survives one
+    repair attempt) — after a 1-second delay, with the client-disconnect
+    check re-run after that delay so a client that left doesn't still get a
+    wasted model call
+  - Last-resort model: `gemini-2.5-flash`, tried if both of the above fail
+  - If every model fails, the user sees the *diagnosed* cause (bad key,
+    quota, overload, unknown model, timeout) rather than a generic message
+  - Per-attempt timeout: 40 seconds; overall request timeout: 90 seconds
+  - All of the above are overridable with environment variables (see
+    [Configuration](#configuration))
 - **Output validation:** the parsed JSON response is validated at runtime
   against a Zod schema (`validation.ts`) — not just guided by the Gemini
   schema, actually checked (enum values, `readinessScore.score` as an
@@ -171,6 +181,46 @@ For a production build:
 npm run build
 npm start
 ```
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | — (required) | Your Gemini API key. Injected automatically in Google AI Studio. |
+| `GEMINI_PRIMARY_MODEL` | `gemini-3.8-flash` | First model tried. |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.1-flash-lite` | Tried if the primary fails. |
+| `GEMINI_EXTRA_MODELS` | `gemini-2.5-flash` | Comma-separated last-resort models. |
+| `GEMINI_ATTEMPT_TIMEOUT_MS` | `40000` | Per-model-attempt timeout. |
+| `GEMINI_TOTAL_TIMEOUT_MS` | `90000` | Whole-request timeout. |
+
+`GET /api/health` reports whether a key is configured and which models are
+in use, without calling Gemini — handy as a pre-flight check before a demo.
+
+## Running standalone (outside AI Studio)
+
+AI Studio apps share its quota, so they can hit 429/503 errors at busy
+times. Running on your own key and host is more reliable:
+
+1. **Get a key.** Create one at <https://aistudio.google.com/apikey>. For
+   the most headroom, link it to a billing-enabled Google Cloud project;
+   free-tier limits are far lower.
+2. **Run locally** (quickest): follow [Local setup](#local-setup).
+3. **Or deploy** — any Node 20+ host works. The server is one process
+   serving both the API and the built UI:
+   - Build command: `npm ci && npm run build`
+   - Start command: `npm start`
+   - Environment: `NODE_ENV=production`, `GEMINI_API_KEY=<your key>`
+   - The app listens on port `3000`. Cloud Run, Render and Railway all let
+     you point their port setting at it.
+4. **Verify** before relying on it: open `/api/health` (expect
+   `"apiKeyConfigured": true`) and generate one real report.
+
+If a model ID is rejected, set `GEMINI_PRIMARY_MODEL` /
+`GEMINI_FALLBACK_MODEL` to IDs your key can use.
+
+**If Gemini is unreachable during a demo**, the UI offers a pre-built
+sample report (clearly labelled as not AI-generated) on any error and in
+the sidebar, so the interface can always be shown.
 
 ## Testing
 

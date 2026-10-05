@@ -4,6 +4,9 @@ import { runAnalysisRoute, type GenerateContentFn } from "./runAnalysisRoute";
 
 export const DEFAULT_PRIMARY_MODEL_ID = "gemini-3.8-flash";
 export const DEFAULT_FALLBACK_MODEL_ID = "gemini-3.1-flash-lite";
+// Last resort: an older, widely available model that is much less likely to be
+// capacity-constrained than the newest releases.
+export const DEFAULT_EXTRA_MODEL_IDS = ["gemini-2.5-flash"];
 
 const MAX_SCENARIO_LENGTH = 4000;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -175,6 +178,8 @@ export interface CreateAppOptions {
   generateContent: GenerateContentFn;
   primaryModelId?: string;
   fallbackModelId?: string;
+  /** Last-resort models tried after the fallback, in order. */
+  extraModelIds?: string[];
   /** Whether a Gemini API key was found at startup (reported by /api/health). */
   apiKeyConfigured?: boolean;
   /** Overridable so a slow model doesn't need a code change. */
@@ -193,6 +198,7 @@ export function createApp(options: CreateAppOptions): Express {
     generateContent,
     primaryModelId = DEFAULT_PRIMARY_MODEL_ID,
     fallbackModelId = DEFAULT_FALLBACK_MODEL_ID,
+    extraModelIds = [],
     apiKeyConfigured = true,
     perAttemptTimeoutMs = 40000,
     totalTimeoutMs = 90000,
@@ -243,7 +249,7 @@ export function createApp(options: CreateAppOptions): Express {
   // Cheap pre-flight check (no Gemini call, no rate limit): run
   // `curl localhost:3000/api/health` before a demo to catch a missing key.
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: apiKeyConfigured, apiKeyConfigured, primaryModelId, fallbackModelId });
+    res.json({ ok: apiKeyConfigured, apiKeyConfigured, models: [primaryModelId, fallbackModelId, ...extraModelIds] });
   });
 
   app.post("/api/analyze", async (req, res) => {
@@ -279,6 +285,8 @@ export function createApp(options: CreateAppOptions): Express {
         scenario,
         primaryModelId,
         fallbackModelId,
+        extraModelIds,
+        sameModelRetries: 1,
         perAttemptTimeoutMs,
         totalTimeoutMs,
         systemInstruction: SYSTEM_INSTRUCTION,

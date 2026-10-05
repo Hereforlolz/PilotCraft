@@ -3,7 +3,7 @@ import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { createApp, DEFAULT_PRIMARY_MODEL_ID, DEFAULT_FALLBACK_MODEL_ID } from "./app";
+import { createApp, DEFAULT_PRIMARY_MODEL_ID, DEFAULT_FALLBACK_MODEL_ID, DEFAULT_EXTRA_MODEL_IDS } from "./app";
 
 dotenv.config();
 
@@ -33,6 +33,8 @@ const app = createApp({
   generateContent: (params) => ai.models.generateContent(params),
   primaryModelId: process.env.GEMINI_PRIMARY_MODEL || DEFAULT_PRIMARY_MODEL_ID,
   fallbackModelId: process.env.GEMINI_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL_ID,
+  extraModelIds: (process.env.GEMINI_EXTRA_MODELS || DEFAULT_EXTRA_MODEL_IDS.join(","))
+    .split(",").map((m) => m.trim()).filter(Boolean),
   apiKeyConfigured,
   perAttemptTimeoutMs: numberFromEnv("GEMINI_ATTEMPT_TIMEOUT_MS"),
   totalTimeoutMs: numberFromEnv("GEMINI_TOTAL_TIMEOUT_MS"),
