@@ -7,6 +7,10 @@ PilotCraft turns a plain-language description of a workplace problem into a
 structured, evidence-checked assessment of whether — and how — to pilot AI
 on it, rather than a "yes, use AI" recommendation.
 
+**Live demo:** <https://ai-adoption-strategy-generator.ai.studio> (hosted on
+Google AI Studio). Don't enter confidential information - see
+[Privacy and data handling](#privacy-and-data-handling).
+
 **Read first:** [Case study](docs/case-study.md)
 
 ## The problem it addresses
@@ -201,6 +205,11 @@ in use, without calling Gemini — handy as a pre-flight check before a demo.
 
 ## Running standalone (outside AI Studio)
 
+The live demo is published from Google AI Studio, which runs whatever code
+was last imported into the AI Studio project - changes merged to this
+repository reach the demo only after the project is synced from GitHub and
+republished.
+
 AI Studio apps share its quota, so they can hit 429/503 errors at busy
 times. Running on your own key and host is more reliable:
 
@@ -240,9 +249,10 @@ report is used only while its stored scenario text exactly matches the sample
 text, and `npm test` fails if a committed bake is stale or fails the report
 schema. With nothing baked (the default) the buttons behave as before.
 
-### Deploying on Render (free tier)
+### Alternative: deploying on Render (free tier)
 
-A [`render.yaml`](./render.yaml) Blueprint is included: in Render choose
+The live demo does not use Render; this is an optional way to self-host the
+same code. A [`render.yaml`](./render.yaml) Blueprint is included: in Render choose
 **New > Blueprint**, point it at this repo, and enter `GEMINI_API_KEY` when
 prompted (use a dedicated key, ideally with a quota/billing cap set in AI
 Studio). Or create a Web Service by hand with build `npm install && npm run build`,
@@ -474,7 +484,11 @@ in future model runs.
   failed per request (for its own retry logic), capped at 200 entries and
   never exposed to the client — it does not include scenario text.
 - What Gemini itself does with submitted content is governed by Google's
-  own API terms, not by this project.
+  own [API terms](https://ai.google.dev/gemini-api/terms), not by this
+  project. On unpaid (free-tier) use, those terms allow Google to use both
+  the submitted text and the generated response to improve its products, and
+  human reviewers may read them; paid use is treated differently. The app's
+  footer says the same.
 
 ## Honest limitations
 
@@ -509,9 +523,9 @@ in future model runs.
 
 ![PilotCraft landing page](./screenshots/landing-page.png)
 
-The input screen, captured from a locally running build. There is
-currently no public deployment of this app — no live-demo link is included
-because none exists to link to.
+The input screen, captured from a locally running build. A live copy is
+published on Google AI Studio:
+<https://ai-adoption-strategy-generator.ai.studio>.
 
 There is no screenshot of a generated report here yet — a verified one,
 checked against its own input for fidelity, is still pending.
