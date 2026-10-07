@@ -56,7 +56,11 @@ export const responseSchema = {
         type: Type.OBJECT,
         properties: {
           role: { type: Type.STRING },
-          impact: { type: Type.STRING },
+          impact: {
+            type: Type.STRING,
+            enum: ["low", "medium", "high"],
+            description: "Exactly one of low | medium | high - how much this role's day-to-day work changes. Put any explanation in involvement, not here."
+          },
           involvement: { type: Type.STRING }
         },
         required: ["role", "impact", "involvement"]
@@ -172,7 +176,8 @@ export const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze th
 5. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process or workflow change, fixing an existing tool, search, or taxonomy) would address the problem as well or better, say so explicitly in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
 6. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
 7. Calibrate certainty. readinessScore.score is an integer from 0 through 100 - a percentage-style planning heuristic, NOT a 0-10 scale. Convert any intuitive "out of 10" sense before writing it down: 7/10 must be written as 70, not 7. The score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
-8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".`;
+8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".
+9. Stakeholder impact is a level, not prose. stakeholders[].impact must be exactly one of "low", "medium", or "high" - how much that role's day-to-day work changes. Describe what the role does or is asked to do in stakeholders[].involvement, never in impact.`;
 
 export interface CreateAppOptions {
   generateContent: GenerateContentFn;

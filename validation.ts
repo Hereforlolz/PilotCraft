@@ -29,7 +29,12 @@ export const analysisReportSchema = z.object({
   stakeholders: z.array(
     z.object({
       role: nonEmptyString,
-      impact: nonEmptyString,
+      // The UI renders this as a "<level> impact" pill, so it must be a level,
+      // not prose. Case/whitespace are normalized (the model may say "High").
+      impact: z.preprocess(
+        (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
+        z.enum(["low", "medium", "high"])
+      ),
       involvement: nonEmptyString,
     })
   ),

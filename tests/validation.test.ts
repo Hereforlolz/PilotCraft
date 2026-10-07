@@ -36,3 +36,28 @@ test("an invalid aiSuitability.rating enum value is rejected", () => {
   const result = analysisReportSchema.safeParse(report);
   assert.equal(result.success, false);
 });
+
+// Regression: a live run returned whole sentences in stakeholders[].impact, and
+// the UI (which renders "<impact> impact" as a pill) showed a paragraph.
+test("stakeholders[].impact must be low, medium or high, not prose", () => {
+  const stakeholders = (impact: string) => [{ role: "Support lead", impact, involvement: "Owns rollout" }];
+  const prose = analysisReportSchema.safeParse({
+    ...validReport,
+    stakeholders: stakeholders("Accountable for resource allocation, policy sign-off, and organizational performance."),
+  });
+  assert.equal(prose.success, false);
+  assert.match(prose.error!.issues.map((i) => i.path.join(".")).join(";"), /stakeholders\.0\.impact/);
+
+  for (const level of ["low", "medium", "high"]) {
+    assert.equal(analysisReportSchema.safeParse({ ...validReport, stakeholders: stakeholders(level) }).success, true, level);
+  }
+});
+
+test("stakeholders[].impact is normalized to lowercase so 'High' is accepted and stored as 'high'", () => {
+  const result = analysisReportSchema.safeParse({
+    ...validReport,
+    stakeholders: [{ role: "Support lead", impact: "  High ", involvement: "Owns rollout" }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.stakeholders[0].impact, "high");
+});
