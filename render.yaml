@@ -1,0 +1,21 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Create the service with New > Blueprint, or copy these values into a manual
+# Web Service. GEMINI_API_KEY is deliberately not in this file - enter it in
+# the Render dashboard (sync: false prompts for it and never stores it in git).
+services:
+  - type: web
+    name: pilotcraft
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: PORT
+        value: "3000"
+      - key: GEMINI_API_KEY
+        sync: false

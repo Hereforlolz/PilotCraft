@@ -192,6 +192,9 @@ npm start
 | `GEMINI_EXTRA_MODELS` | `gemini-2.5-flash` | Comma-separated last-resort models. |
 | `GEMINI_ATTEMPT_TIMEOUT_MS` | `40000` | Per-model-attempt timeout. |
 | `GEMINI_TOTAL_TIMEOUT_MS` | `90000` | Whole-request timeout. |
+| `PORT` | `3000` | Port to listen on. Hosts such as Render set this for you. |
+| `TRUST_PROXY` | `1` | Number of reverse-proxy hops in front of the app, so the per-IP rate limiter sees real client IPs. Also accepts `true`/`false` or an Express subnet list. |
+| `DAILY_REQUEST_CAP` | `200` | Global limit on analyses per UTC day across all visitors - a backstop for the API key's quota. |
 
 `GET /api/health` reports whether a key is configured and which models are
 in use, without calling Gemini — handy as a pre-flight check before a demo.
@@ -210,10 +213,35 @@ times. Running on your own key and host is more reliable:
    - Build command: `npm ci && npm run build`
    - Start command: `npm start`
    - Environment: `NODE_ENV=production`, `GEMINI_API_KEY=<your key>`
-   - The app listens on port `3000`. Cloud Run, Render and Railway all let
-     you point their port setting at it.
+   - The app listens on `$PORT` (default `3000`), so Cloud Run, Render and
+     Railway work without extra port configuration.
 4. **Verify** before relying on it: open `/api/health` (expect
    `"apiKeyConfigured": true`) and generate one real report.
+
+### Deploying on Render (free tier)
+
+A [`render.yaml`](./render.yaml) Blueprint is included: in Render choose
+**New > Blueprint**, point it at this repo, and enter `GEMINI_API_KEY` when
+prompted (use a dedicated key, ideally with a quota/billing cap set in AI
+Studio). Or create a Web Service by hand with build `npm install && npm run build`,
+start `npm start`, health check path `/api/health`, and the environment
+variables `NODE_ENV=production` and `GEMINI_API_KEY`.
+
+After the first deploy:
+
+1. Open `/api/health` and expect `"apiKeyConfigured": true`.
+2. Generate one real report to confirm the model IDs work for your key.
+3. **Check the rate limiter sees real client IPs.** If every visitor appears
+   to share one address, the limiter degrades into a single shared bucket;
+   adjust `TRUST_PROXY` (the number of proxy hops in front of the app).
+   `DAILY_REQUEST_CAP` protects your quota either way.
+
+Free-tier caveats: the service [spins down after 15 minutes without
+traffic](https://render.com/docs/free), so the first visit afterwards takes
+about a minute to wake, and the in-memory rate-limit counters reset when it
+does. The free Gemini tier is also subject to Google's terms for unpaid
+services, which may allow submitted content to be used to improve Google's
+products - another reason not to enter confidential data.
 
 If a model ID is rejected, set `GEMINI_PRIMARY_MODEL` /
 `GEMINI_FALLBACK_MODEL` to IDs your key can use.
@@ -230,7 +258,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-`npm test` runs **74 tests, all passing**, covering:
+`npm test` runs **83 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
