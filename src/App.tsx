@@ -414,9 +414,9 @@ export default function App() {
           </div>
         </div>
         <p className="max-w-7xl mx-auto px-4 mt-8 text-xs text-slate-500 leading-relaxed">
-          Data use: your scenario text is sent to Google's Gemini API. If this demo runs on an unpaid (free-tier) API key,
-          Google may use submitted text, and human reviewers may read it, to improve its products. Don't enter anything
-          confidential. See the{' '}
+          Data use: your scenario text, and the report Gemini generates from it, are processed by Google's Gemini API. If
+          this demo runs on an unpaid (free-tier) API key, Google may use both to improve its products, and human
+          reviewers may read them. Don't enter anything confidential. See the{' '}
           <a
             href="https://ai.google.dev/gemini-api/terms"
             target="_blank"
