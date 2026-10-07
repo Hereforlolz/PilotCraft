@@ -7,7 +7,22 @@ import { createApp, DEFAULT_PRIMARY_MODEL_ID, DEFAULT_FALLBACK_MODEL_ID, DEFAULT
 
 dotenv.config();
 
-const PORT = 3000;
+const numberFromEnv = (name: string): number | undefined => {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+};
+
+// TRUST_PROXY: a hop count ("1"), "true"/"false", or an Express subnet list.
+const parseTrustProxy = (raw: string | undefined): boolean | number | string => {
+  if (raw === undefined || raw.trim() === "") return 1;
+  const v = raw.trim();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return /^\d+$/.test(v) ? Number(v) : v;
+};
+
+// Hosts like Render/Railway/Cloud Run tell the app which port to bind via PORT.
+const PORT = numberFromEnv("PORT") ?? 3000;
 
 // Shared Gemini Client
 const ai = new GoogleGenAI({
@@ -24,11 +39,6 @@ if (!apiKeyConfigured) {
   console.warn("WARNING: GEMINI_API_KEY is not set (or is still the .env.example placeholder). Analyses will fail until it is.");
 }
 
-const numberFromEnv = (name: string): number | undefined => {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : undefined;
-};
-
 const app = createApp({
   generateContent: (params) => ai.models.generateContent(params),
   primaryModelId: process.env.GEMINI_PRIMARY_MODEL || DEFAULT_PRIMARY_MODEL_ID,
@@ -38,6 +48,10 @@ const app = createApp({
   apiKeyConfigured,
   perAttemptTimeoutMs: numberFromEnv("GEMINI_ATTEMPT_TIMEOUT_MS"),
   totalTimeoutMs: numberFromEnv("GEMINI_TOTAL_TIMEOUT_MS"),
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
+  // Protects the API key's quota on a public deploy. Set DAILY_REQUEST_CAP
+  // higher (or to a billing-backed key's comfort level) to change it.
+  dailyRequestCap: numberFromEnv("DAILY_REQUEST_CAP") ?? 200,
 });
 
 async function startServer() {
@@ -58,7 +72,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+    console.log(`Server running at http://localhost:${PORT} (NODE_ENV=${process.env.NODE_ENV ?? "development"})`);
   });
 }
 

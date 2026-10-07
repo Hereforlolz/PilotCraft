@@ -110,3 +110,57 @@ test("rate limiting returns 429 after the per-IP limit is exceeded", async () =>
     assert.equal(lastStatus, 429);
   });
 });
+
+const okGenerate: GenerateContentFn = async () => ({ text: JSON.stringify(validReport) });
+const post = (base: string, body: unknown, headers: Record<string, string> = {}) =>
+  fetch(`${base}/api/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+
+test("the SSE response disables proxy buffering", async () => {
+  await withServer(okGenerate, async (base) => {
+    const res = await post(base, { scenario: "a real scenario" });
+    assert.equal(res.headers.get("x-accel-buffering"), "no");
+    await res.text();
+  });
+});
+
+test("the daily cap returns 429 once reached, and invalid requests don't use it up", async () => {
+  await withServer(okGenerate, async (base) => {
+    // Two malformed requests must not consume the cap of 2.
+    assert.equal((await post(base, {})).status, 400);
+    assert.equal((await post(base, {})).status, 400);
+
+    for (let i = 0; i < 2; i++) {
+      const res = await post(base, { scenario: "a real scenario" });
+      assert.equal(res.status, 200);
+      await res.text();
+    }
+    const capped = await post(base, { scenario: "a real scenario" });
+    assert.equal(capped.status, 429);
+    assert.match((await capped.json()).error, /daily usage limit/i);
+  }, { dailyRequestCap: 2 });
+});
+
+test("without a dailyRequestCap there is no global limit", async () => {
+  await withServer(okGenerate, async (base) => {
+    for (let i = 0; i < 3; i++) {
+      const res = await post(base, { scenario: "a real scenario" });
+      assert.equal(res.status, 200);
+      await res.text();
+    }
+  });
+});
+
+test("trustProxy is configurable: with 2 hops, distinct clients behind two proxies get separate rate-limit buckets", async () => {
+  // With the default of 1 hop every request below would be keyed on the
+  // rightmost address ("10.0.0.1") and share one bucket, hitting 429.
+  await withServer(neverCalled, async (base) => {
+    for (let i = 1; i <= 10; i++) {
+      const res = await post(base, {}, { "X-Forwarded-For": `1.2.3.${i}, 10.0.0.1` });
+      assert.equal(res.status, 400, `request ${i} should be a 400, not rate limited`);
+    }
+  }, { trustProxy: 2 });
+});

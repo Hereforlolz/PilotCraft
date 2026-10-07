@@ -185,6 +185,19 @@ export interface CreateAppOptions {
   /** Overridable so a slow model doesn't need a code change. */
   perAttemptTimeoutMs?: number;
   totalTimeoutMs?: number;
+  /**
+   * Express "trust proxy" setting: a hop count, boolean, or subnet list.
+   * Defaults to 1. If req.ip shows a proxy's address instead of the real
+   * client on your host, the per-IP limiter degrades into one shared bucket,
+   * so verify it after deploying and adjust (see TRUST_PROXY in the README).
+   */
+  trustProxy?: boolean | number | string;
+  /**
+   * Max accepted /api/analyze requests per UTC day across all clients, as a
+   * backstop that protects the API key's quota even if per-IP limiting
+   * misbehaves. Unset means no global cap.
+   */
+  dailyRequestCap?: number;
 }
 
 /**
@@ -202,14 +215,16 @@ export function createApp(options: CreateAppOptions): Express {
     apiKeyConfigured = true,
     perAttemptTimeoutMs = 40000,
     totalTimeoutMs = 90000,
+    trustProxy = 1,
+    dailyRequestCap,
   } = options;
 
   const app = express();
 
-  // Trust the first proxy hop (Cloud Run / AI Studio hosting) so req.ip
-  // reflects the real client instead of the proxy, which the rate limiter
-  // below depends on.
-  app.set("trust proxy", 1);
+  // Trust the configured number of proxy hops (default 1: Cloud Run / AI
+  // Studio / Render) so req.ip reflects the real client instead of the proxy,
+  // which the rate limiter below depends on.
+  app.set("trust proxy", trustProxy);
 
   app.use(express.json({ limit: "100kb" }));
 
@@ -233,6 +248,22 @@ export function createApp(options: CreateAppOptions): Express {
     timestamps.push(now);
     requestLog.set(ip, timestamps);
     return timestamps.length > RATE_LIMIT_MAX_REQUESTS;
+  }
+
+  // Global daily cap (fixed UTC-day window, in-memory): a backstop on total
+  // Gemini spend that doesn't depend on correctly identifying client IPs.
+  let dailyCount = 0;
+  let dailyKey = "";
+  function isDailyCapReached(): boolean {
+    if (dailyRequestCap === undefined) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== dailyKey) {
+      dailyKey = today;
+      dailyCount = 0;
+    }
+    if (dailyCount >= dailyRequestCap) return true;
+    dailyCount++;
+    return false;
   }
 
   // Periodically evict IPs with no recent requests so the map doesn't grow
@@ -268,10 +299,19 @@ export function createApp(options: CreateAppOptions): Express {
       return res.status(400).json({ error: `Scenario is too long (max ${MAX_SCENARIO_LENGTH} characters).` });
     }
 
+    // Checked after validation so malformed requests don't use up the cap.
+    if (isDailyCapReached()) {
+      return res.status(429).json({
+        error: "The demo has reached its daily usage limit. Please try again tomorrow (UTC), or view the sample report.",
+      });
+    }
+
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    // Stop nginx-style reverse proxies from buffering the event stream.
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
     const sendEvent = (type: string, data: any) => {
