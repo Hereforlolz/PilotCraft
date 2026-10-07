@@ -16,7 +16,7 @@ export interface ResponsibilitySplit {
 
 export interface Stakeholder {
   role: string;
-  impact: string;
+  impact: 'low' | 'medium' | 'high';
   involvement: string;
 }
 

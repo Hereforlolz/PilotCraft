@@ -50,3 +50,15 @@ test("SYSTEM_INSTRUCTION allows a defined threshold, not just a cadence, as an a
   assert.match(SYSTEM_INSTRUCTION, /a recurring cadence.*or a clearly defined trigger\/threshold/);
   assert.match(SYSTEM_INSTRUCTION, /not a vague "monitor closely" or an unscheduled "spot-check some of them"/);
 });
+
+test("responseSchema constrains stakeholders[].impact to low/medium/high so it can't come back as prose", () => {
+  const impact = (responseSchema.properties.stakeholders as any).items.properties.impact;
+  assert.equal(impact.type, Type.STRING);
+  assert.deepEqual(impact.enum, ["low", "medium", "high"]);
+  assert.match(impact.description, /involvement/i);
+});
+
+test("SYSTEM_INSTRUCTION says stakeholder impact is a level and explanations belong in involvement", () => {
+  assert.match(SYSTEM_INSTRUCTION, /stakeholders\[\]\.impact must be exactly one of "low", "medium", or "high"/);
+  assert.match(SYSTEM_INSTRUCTION, /stakeholders\[\]\.involvement, never in impact/);
+});

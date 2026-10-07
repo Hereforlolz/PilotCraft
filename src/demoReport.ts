@@ -31,9 +31,9 @@ export const DEMO_REPORT: AnalysisReport = {
     ai: ["Categorise incoming tickets", "Draft first-pass replies for repetitive categories"],
   },
   stakeholders: [
-    { role: "Support agents", impact: "High", involvement: "Review and edit AI drafts daily" },
-    { role: "Support lead", impact: "High", involvement: "Owns the pilot and the weekly spot-checks" },
-    { role: "Customers", impact: "Medium", involvement: "Receive faster replies; no direct involvement" },
+    { role: "Support agents", impact: "high", involvement: "Review and edit AI drafts daily" },
+    { role: "Support lead", impact: "high", involvement: "Owns the pilot and the weekly spot-checks" },
+    { role: "Customers", impact: "medium", involvement: "Receive faster replies; no direct involvement" },
   ],
   adoptionBarriers: [
     { barrier: "Agents distrust the accuracy of AI drafts", mitigation: "Two weeks of shadow mode where drafts are visible but never sent" },

@@ -164,3 +164,26 @@ test("trustProxy is configurable: with 2 hops, distinct clients behind two proxi
     }
   }, { trustProxy: 2 });
 });
+
+test("a report with prose in stakeholders[].impact is repaired once and then delivered with a level", async () => {
+  const prose = {
+    ...validReport,
+    stakeholders: [{ role: "Support lead", impact: "Accountable for resource allocation and policy sign-off.", involvement: "Owns rollout" }],
+  };
+  const requests: string[] = [];
+  const generateContent: GenerateContentFn = async (params) => {
+    requests.push(params.contents);
+    return { text: JSON.stringify(requests.length === 1 ? prose : validReport) };
+  };
+
+  await withServer(generateContent, async (base) => {
+    const res = await post(base, { scenario: "a real scenario" });
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    assert.match(text, /event: result/);
+    assert.doesNotMatch(text, /Accountable for resource allocation/);
+    assert.match(text, /"impact":"high"/);
+  });
+  assert.equal(requests.length, 2);
+  assert.match(requests[1], /stakeholders\.0\.impact/);
+});
