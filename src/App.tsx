@@ -413,6 +413,19 @@ export default function App() {
             <span className="flex items-center gap-1.5"><Info className="w-3 h-3" /> Scenarios Sent to Gemini API</span>
           </div>
         </div>
+        <p className="max-w-7xl mx-auto px-4 mt-8 text-xs text-slate-500 leading-relaxed">
+          Data use: your scenario text is sent to Google's Gemini API. If this demo runs on an unpaid (free-tier) API key,
+          Google may use submitted text, and human reviewers may read it, to improve its products. Don't enter anything
+          confidential. See the{' '}
+          <a
+            href="https://ai.google.dev/gemini-api/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-indigo-600"
+          >
+            Gemini API terms
+          </a>.
+        </p>
       </footer>
     </div>
   );
