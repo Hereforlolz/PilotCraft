@@ -73,7 +73,28 @@ test("responseSchema requires inputFit with a constrained type and an explanatio
 });
 
 test("SYSTEM_INSTRUCTION tells the model when to use broad_or_general and not to invent a workflow", () => {
-  assert.match(SYSTEM_INSTRUCTION, /Set inputFit\.type to "specific_workflow" only if/);
+  assert.match(SYSTEM_INSTRUCTION, /Set inputFit\.type to "broad_or_general" only if/);
   assert.match(SYSTEM_INSTRUCTION, /personal or career question/);
   assert.match(SYSTEM_INSTRUCTION, /do not invent a specific workflow/);
+});
+
+test("SYSTEM_INSTRUCTION treats a named team or function with a stated goal as a specific workflow, even when thin", () => {
+  // Live run: "replace our tier-1 support team with an AI agent..." was flagged broad.
+  assert.match(SYSTEM_INSTRUCTION, /A named team, function, or process with a stated goal counts as "specific_workflow" even when it is thin on detail/);
+  const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
+  assert.match(description, /named team, function or process with a stated goal is specific_workflow/);
+});
+
+test("SYSTEM_INSTRUCTION requires invented thresholds to be labelled proposals and consistent with the stated baseline", () => {
+  // Live run: a stop threshold of 95% accuracy against a stated 97% human baseline.
+  assert.match(SYSTEM_INSTRUCTION, /proposed starting value to calibrate against the pilot baseline/);
+  assert.match(SYSTEM_INSTRUCTION, /begin the entry with "Proposed:"/);
+  assert.match(SYSTEM_INSTRUCTION, /must be consistent with any baseline the user did state/);
+  assert.match(SYSTEM_INSTRUCTION, /stop threshold must not allow performance worse than the stated current human performance/);
+});
+
+test("SYSTEM_INSTRUCTION forbids recommending training on or retaining sensitive data unless required, and asks for a risk entry", () => {
+  // Live run: a clinic routing plan logged patient-message decisions "to train and calibrate routing models".
+  assert.match(SYSTEM_INSTRUCTION, /Do not recommend training, fine-tuning, or retaining sensitive data/);
+  assert.match(SYSTEM_INSTRUCTION, /list that as a risk with a concrete safeguard and a human review step/);
 });
