@@ -80,9 +80,9 @@ test("SYSTEM_INSTRUCTION tells the model when to use broad_or_general and not to
 
 test("SYSTEM_INSTRUCTION treats a named team or function with a stated goal as a specific workflow, even when thin", () => {
   // Live run: "replace our tier-1 support team with an AI agent..." was flagged broad.
-  assert.match(SYSTEM_INSTRUCTION, /a named team, function, or process with a stated goal counts as specific even when it is thin on detail/);
+  assert.match(SYSTEM_INSTRUCTION, /naming a task or process, or a goal for a named team or function, counts as specific even when it is thin on detail/);
   const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
-  assert.match(description, /named team, function or process with a stated goal is specific_workflow/);
+  assert.match(description, /a goal for a named team or function, is specific_workflow even if thin on detail/);
 });
 
 test("SYSTEM_INSTRUCTION requires invented thresholds to be labelled proposals and consistent with the stated baseline", () => {
@@ -122,4 +122,12 @@ test("rule 10 does not treat advice about a specific task or process as general"
   const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
   assert.match(description, /not tied to a specific task or process/);
   assert.match(description, /Advice or help on a specific task or process is specific_workflow/);
+});
+
+test("rule 10 does not treat a bare team, function or company name as a specific workflow", () => {
+  // Codex review: an input like "Our support team" named a team, so it skipped the broad rule and fell
+  // through to the unconditional "otherwise specific_workflow" despite having no task or goal.
+  assert.match(SYSTEM_INSTRUCTION, /does not name any task, process, or goal \(naming only a team, function, or company is not enough\)/);
+  const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
+  assert.match(description, /does not name any task, process or goal \(a team, function or company name alone is not enough\)/);
 });
