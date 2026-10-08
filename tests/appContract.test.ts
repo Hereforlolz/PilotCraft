@@ -101,7 +101,7 @@ test("SYSTEM_INSTRUCTION forbids recommending training on or retaining sensitive
 
 test("rule 10 states precedence: a general-strategy request is broad even when it names a team", () => {
   // Codex review: "Give our support team a general AI strategy to reduce costs" matched both sentences.
-  assert.match(SYSTEM_INSTRUCTION, /asks for general AI strategy, advice, or learning \(even when it mentions a team or company\)/);
+  assert.match(SYSTEM_INSTRUCTION, /asks for general AI strategy, advice, or learning that is not tied to a specific task or process \(even when it mentions a team or company\)/);
   assert.match(SYSTEM_INSTRUCTION, /this takes precedence over the next sentence/);
   const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
   assert.match(description, /even if it mentions a team or company/);
@@ -114,4 +114,12 @@ test("rule 2 exempts clearly labelled proposed targets and thresholds, but not b
   assert.match(SYSTEM_INSTRUCTION, /never invent baselines, current performance, or ROI figures/);
   // The original rule 2 wording must remain.
   assert.match(SYSTEM_INSTRUCTION, /Do not fabricate numbers\./);
+});
+
+test("rule 10 does not treat advice about a specific task or process as general", () => {
+  // Codex review: "Advise our AP team on using AI to detect duplicate invoices" matched the bare word "advice".
+  assert.match(SYSTEM_INSTRUCTION, /A request for advice or help on a specific task or process .*is specific, not general/);
+  const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
+  assert.match(description, /not tied to a specific task or process/);
+  assert.match(description, /Advice or help on a specific task or process is specific_workflow/);
 });
