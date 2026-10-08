@@ -80,7 +80,7 @@ test("SYSTEM_INSTRUCTION tells the model when to use broad_or_general and not to
 
 test("SYSTEM_INSTRUCTION treats a named team or function with a stated goal as a specific workflow, even when thin", () => {
   // Live run: "replace our tier-1 support team with an AI agent..." was flagged broad.
-  assert.match(SYSTEM_INSTRUCTION, /A named team, function, or process with a stated goal counts as "specific_workflow" even when it is thin on detail/);
+  assert.match(SYSTEM_INSTRUCTION, /a named team, function, or process with a stated goal counts as specific even when it is thin on detail/);
   const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
   assert.match(description, /named team, function or process with a stated goal is specific_workflow/);
 });
@@ -97,4 +97,21 @@ test("SYSTEM_INSTRUCTION forbids recommending training on or retaining sensitive
   // Live run: a clinic routing plan logged patient-message decisions "to train and calibrate routing models".
   assert.match(SYSTEM_INSTRUCTION, /Do not recommend training, fine-tuning, or retaining sensitive data/);
   assert.match(SYSTEM_INSTRUCTION, /list that as a risk with a concrete safeguard and a human review step/);
+});
+
+test("rule 10 states precedence: a general-strategy request is broad even when it names a team", () => {
+  // Codex review: "Give our support team a general AI strategy to reduce costs" matched both sentences.
+  assert.match(SYSTEM_INSTRUCTION, /asks for general AI strategy, advice, or learning \(even when it mentions a team or company\)/);
+  assert.match(SYSTEM_INSTRUCTION, /this takes precedence over the next sentence/);
+  const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
+  assert.match(description, /even if it mentions a team or company/);
+  assert.match(description, /takes precedence/);
+});
+
+test("rule 2 exempts clearly labelled proposed targets and thresholds, but not baselines or ROI figures", () => {
+  // Codex review: rule 2 ("do not fabricate numbers") and rule 11 (emit "Proposed:" thresholds) could conflict.
+  assert.match(SYSTEM_INSTRUCTION, /does not apply to clearly labeled proposed targets or thresholds \(see rule 11\)/);
+  assert.match(SYSTEM_INSTRUCTION, /never invent baselines, current performance, or ROI figures/);
+  // The original rule 2 wording must remain.
+  assert.match(SYSTEM_INSTRUCTION, /Do not fabricate numbers\./);
 });
