@@ -82,6 +82,14 @@ export const analysisReportSchema = z.object({
     assumptions: stringArray,
     missingEvidence: stringArray,
   }),
+  // Optional so reports without it (older data, sample/eval fixtures) stay
+  // valid; z.object strips unknown keys, so it must be declared to survive.
+  inputFit: z
+    .object({
+      type: z.enum(["specific_workflow", "broad_or_general"]),
+      explanation: nonEmptyString,
+    })
+    .optional(),
   readinessScore: z.object({
     score: z.number().int().min(0).max(100),
     explanation: nonEmptyString,

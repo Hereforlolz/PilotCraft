@@ -62,3 +62,18 @@ test("SYSTEM_INSTRUCTION says stakeholder impact is a level and explanations bel
   assert.match(SYSTEM_INSTRUCTION, /stakeholders\[\]\.impact must be exactly one of "low", "medium", or "high"/);
   assert.match(SYSTEM_INSTRUCTION, /stakeholders\[\]\.involvement, never in impact/);
 });
+
+test("responseSchema requires inputFit with a constrained type and an explanation", () => {
+  const inputFit = (responseSchema.properties as any).inputFit;
+  assert.equal(inputFit.type, Type.OBJECT);
+  assert.deepEqual(inputFit.properties.type.enum, ["specific_workflow", "broad_or_general"]);
+  assert.equal(inputFit.properties.explanation.type, Type.STRING);
+  assert.deepEqual(inputFit.required, ["type", "explanation"]);
+  assert.ok((responseSchema.required as string[]).includes("inputFit"));
+});
+
+test("SYSTEM_INSTRUCTION tells the model when to use broad_or_general and not to invent a workflow", () => {
+  assert.match(SYSTEM_INSTRUCTION, /Set inputFit\.type to "specific_workflow" only if/);
+  assert.match(SYSTEM_INSTRUCTION, /personal or career question/);
+  assert.match(SYSTEM_INSTRUCTION, /do not invent a specific workflow/);
+});

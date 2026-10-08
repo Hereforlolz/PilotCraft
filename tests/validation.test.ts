@@ -61,3 +61,17 @@ test("stakeholders[].impact is normalized to lowercase so 'High' is accepted and
   assert.equal(result.success, true);
   assert.equal(result.data!.stakeholders[0].impact, "high");
 });
+
+test("inputFit is optional, accepts both types, and rejects an unknown type or empty explanation", () => {
+  // Absent (older reports, sample and eval fixtures): still valid.
+  assert.equal(analysisReportSchema.safeParse(validReport).success, true);
+
+  for (const type of ["specific_workflow", "broad_or_general"]) {
+    const result = analysisReportSchema.safeParse({ ...validReport, inputFit: { type, explanation: "Because." } });
+    assert.equal(result.success, true, type);
+    assert.equal(result.data!.inputFit!.type, type);
+  }
+
+  assert.equal(analysisReportSchema.safeParse({ ...validReport, inputFit: { type: "vague", explanation: "x" } }).success, false);
+  assert.equal(analysisReportSchema.safeParse({ ...validReport, inputFit: { type: "broad_or_general", explanation: "" } }).success, false);
+});

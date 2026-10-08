@@ -142,6 +142,21 @@ export const responseSchema = {
       },
       required: ["userProvidedFacts", "assumptions", "missingEvidence"]
     },
+    inputFit: {
+      type: Type.OBJECT,
+      properties: {
+        type: {
+          type: Type.STRING,
+          enum: ["specific_workflow", "broad_or_general"],
+          description: "specific_workflow if the scenario describes a particular task, process or workflow people actually do; broad_or_general if it is a personal/career question, a request for general AI strategy or learning, or too vague to identify a specific workflow."
+        },
+        explanation: {
+          type: Type.STRING,
+          description: "One or two plain sentences addressed to the user: why the input was classified this way and, if broad_or_general, what to describe instead (who does the task, how often, how long it takes)."
+        }
+      },
+      required: ["type", "explanation"]
+    },
     readinessScore: {
       type: Type.OBJECT,
       properties: {
@@ -163,7 +178,7 @@ export const responseSchema = {
   required: [
     "problemStatement", "clarifyingQuestions", "aiSuitability", "futureWorkflow",
     "responsibilitySplit", "stakeholders", "adoptionBarriers", "trainingAndCommunication",
-    "risks", "pilotPlan", "successMetrics", "decisionCriteria", "evidenceCheck", "readinessScore"
+    "risks", "pilotPlan", "successMetrics", "decisionCriteria", "evidenceCheck", "inputFit", "readinessScore"
   ]
 };
 
@@ -177,7 +192,8 @@ export const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze th
 6. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
 7. Calibrate certainty. readinessScore.score is an integer from 0 through 100 - a percentage-style planning heuristic, NOT a 0-10 scale. Convert any intuitive "out of 10" sense before writing it down: 7/10 must be written as 70, not 7. The score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
 8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".
-9. Stakeholder impact is a level, not prose. stakeholders[].impact must be exactly one of "low", "medium", or "high" - how much that role's day-to-day work changes. Describe what the role does or is asked to do in stakeholders[].involvement, never in impact.`;
+9. Stakeholder impact is a level, not prose. stakeholders[].impact must be exactly one of "low", "medium", or "high" - how much that role's day-to-day work changes. Describe what the role does or is asked to do in stakeholders[].involvement, never in impact.
+10. Input fit. Set inputFit.type to "specific_workflow" only if the scenario describes a particular task, process, or workflow that people actually do (even briefly). Use "broad_or_general" if it is a personal or career question, a request for general AI strategy or learning, or too vague to identify a specific workflow. In inputFit.explanation, tell the user in one or two plain sentences why, and for "broad_or_general" what to describe instead (who does the task, how often, how long it takes). For "broad_or_general" inputs still give a best-effort assessment, but do not invent a specific workflow, and keep readinessScore low because the evidence is thin.`;
 
 export interface CreateAppOptions {
   generateContent: GenerateContentFn;

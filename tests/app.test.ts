@@ -187,3 +187,15 @@ test("a report with prose in stakeholders[].impact is repaired once and then del
   assert.equal(requests.length, 2);
   assert.match(requests[1], /stakeholders\.0\.impact/);
 });
+
+test("inputFit survives validation and reaches the client in the result event", async () => {
+  const report = { ...validReport, inputFit: { type: "broad_or_general", explanation: "Describe one task and who does it." } };
+  const generateContent: GenerateContentFn = async () => ({ text: JSON.stringify(report) });
+
+  await withServer(generateContent, async (base) => {
+    const res = await post(base, { scenario: "what is my first 90 days" });
+    const text = await res.text();
+    assert.match(text, /event: result/);
+    assert.match(text, /"inputFit":\{"type":"broad_or_general","explanation":"Describe one task and who does it\."\}/);
+  });
+});

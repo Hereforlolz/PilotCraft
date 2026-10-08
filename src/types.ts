@@ -69,6 +69,15 @@ export interface ReadinessScore {
   factorsReducingScore: string[];
 }
 
+/**
+ * Whether the input described a specific workflow. Absent on reports that
+ * predate this field (and on the built-in sample), which show no banner.
+ */
+export interface InputFit {
+  type: 'specific_workflow' | 'broad_or_general';
+  explanation: string;
+}
+
 export interface AnalysisReport {
   problemStatement: string;
   clarifyingQuestions: string[];
@@ -84,4 +93,5 @@ export interface AnalysisReport {
   decisionCriteria: DecisionCriteria;
   evidenceCheck: EvidenceCheck;
   readinessScore: ReadinessScore;
+  inputFit?: InputFit;
 }

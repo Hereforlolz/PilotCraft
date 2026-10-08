@@ -74,6 +74,16 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
         ))}
       </nav>
 
+      {report.inputFit?.type === 'broad_or_general' && (
+        <div role="note" className="flex items-start gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 text-amber-900">
+          <Info className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+          <div className="text-sm leading-relaxed">
+            <p className="font-semibold">This doesn't look like a specific workflow, so this assessment is general.</p>
+            <p className="mt-1">{report.inputFit.explanation}</p>
+          </div>
+        </div>
+      )}
+
       {/* Executive Summary & Readiness */}
       <section id="assessment" className="scroll-mt-24 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">

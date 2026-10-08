@@ -48,3 +48,16 @@ test("reportToMarkdown handles empty arrays without producing malformed markdown
   const md = reportToMarkdown(emptyish);
   assert.ok(md.includes("_None identified._") || md.includes("_None extracted._"));
 });
+
+test("reportToMarkdown notes a broad input, and only then", () => {
+  const broad = reportToMarkdown({
+    ...validReport,
+    inputFit: { type: "broad_or_general", explanation: "Describe one task, who does it and how often." },
+  });
+  assert.match(broad, /> \*\*Note:\*\* This input did not describe a specific workflow/);
+  assert.ok(broad.includes("Describe one task, who does it and how often."));
+
+  const specific = reportToMarkdown({ ...validReport, inputFit: { type: "specific_workflow", explanation: "A named process." } });
+  assert.doesNotMatch(specific, /did not describe a specific workflow/);
+  assert.doesNotMatch(reportToMarkdown(validReport), /did not describe a specific workflow/);
+});
