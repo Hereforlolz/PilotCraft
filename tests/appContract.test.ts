@@ -72,8 +72,50 @@ test("responseSchema requires inputFit with a constrained type and an explanatio
   assert.ok((responseSchema.required as string[]).includes("inputFit"));
 });
 
-test("SYSTEM_INSTRUCTION tells the model when to use broad_or_general and not to invent a workflow", () => {
-  assert.match(SYSTEM_INSTRUCTION, /Set inputFit\.type to "specific_workflow" only if/);
+test("SYSTEM_INSTRUCTION requires invented thresholds to be labelled proposals and consistent with the stated baseline", () => {
+  // Live run: a stop threshold of 95% accuracy against a stated 97% human baseline.
+  assert.match(SYSTEM_INSTRUCTION, /proposed starting value to calibrate against the pilot baseline/);
+  assert.match(SYSTEM_INSTRUCTION, /begin the entry with "Proposed:"/);
+  assert.match(SYSTEM_INSTRUCTION, /must be consistent with any baseline the user did state/);
+  assert.match(SYSTEM_INSTRUCTION, /stop threshold must not allow performance worse than the stated current human performance/);
+});
+
+test("SYSTEM_INSTRUCTION forbids recommending training on or retaining sensitive data unless required, and asks for a risk entry", () => {
+  // Live run: a clinic routing plan logged patient-message decisions "to train and calibrate routing models".
+  assert.match(SYSTEM_INSTRUCTION, /Do not recommend training, fine-tuning, or retaining sensitive data/);
+  assert.match(SYSTEM_INSTRUCTION, /list that as a risk with a concrete safeguard and a human review step/);
+});
+
+test("rule 2 exempts clearly labelled proposed targets and thresholds, but not baselines or ROI figures", () => {
+  // Codex review: rule 2 ("do not fabricate numbers") and rule 11 (emit "Proposed:" thresholds) could conflict.
+  assert.match(SYSTEM_INSTRUCTION, /does not apply to clearly labeled proposed targets or thresholds \(see rule 11\)/);
+  assert.match(SYSTEM_INSTRUCTION, /never invent baselines, current performance, or ROI figures/);
+  // The original rule 2 wording must remain.
+  assert.match(SYSTEM_INSTRUCTION, /Do not fabricate numbers\./);
+});
+
+
+test("rule 10 requires a positive condition for specific_workflow and defaults everything else to broad_or_general", () => {
+  // Codex reviews, rounds 1-5: listing the broad cases and defaulting to specific left a new gap each time
+  // (team-only, goal-only, "advice", general strategy that names a team). The default is now broad.
+  assert.match(SYSTEM_INSTRUCTION, /Set inputFit\.type to "specific_workflow" only if the input names a concrete task or process that people do, or a concrete change to a named team's or function's work/);
+  assert.match(SYSTEM_INSTRUCTION, /Everything else is "broad_or_general"/);
+  assert.match(SYSTEM_INSTRUCTION, /thin evidence is handled by missingEvidence entries and a low readinessScore, not by this flag/);
+  const description: string = (responseSchema.properties as any).inputFit.properties.type.description;
+  assert.match(description, /specific_workflow only if the input names a concrete task or process people do/);
+  assert.match(description, /Everything else is broad_or_general/);
+});
+
+test("rule 10 classifies the borderline inputs Codex raised through worked examples", () => {
+  const broad = ["our support team", "reduce costs", "give our support team a general AI strategy to reduce costs", "what is my first 90 days"];
+  const specific = ["replace our tier-1 support team with an AI agent", "advise our AP team on using AI to detect duplicate invoices"];
+  const [, broadPart, specificPart] = SYSTEM_INSTRUCTION.match(/Examples - broad_or_general: (.*?) specific_workflow: (.*?)\. In inputFit/s) ?? [];
+  assert.ok(broadPart && specificPart, "rule 10 must contain broad_or_general and specific_workflow examples");
+  for (const example of broad) assert.ok(broadPart.includes(`"${example}"`), `broad example missing: ${example}`);
+  for (const example of specific) assert.ok(specificPart.includes(`"${example}"`), `specific example missing: ${example}`);
+});
+
+test("rule 10 still tells the model not to invent a workflow for broad inputs", () => {
   assert.match(SYSTEM_INSTRUCTION, /personal or career question/);
   assert.match(SYSTEM_INSTRUCTION, /do not invent a specific workflow/);
 });
