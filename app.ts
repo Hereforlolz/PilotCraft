@@ -175,6 +175,16 @@ export interface CreateAppOptions {
   generateContent: GenerateContentFn;
   primaryModelId?: string;
   fallbackModelId?: string;
+  /**
+   * Express's "trust proxy" setting, which controls where req.ip (the
+   * rate-limit key) comes from. Only set this when the app is actually
+   * deployed behind a reverse proxy that itself overwrites/controls
+   * X-Forwarded-For - trusting it on a directly reachable instance lets any
+   * caller spoof a fresh IP identity per request and bypass the rate
+   * limiter entirely. Left unset (the default), Express trusts no proxy and
+   * req.ip is the actual socket address.
+   */
+  trustProxy?: boolean | number | string;
 }
 
 /**
@@ -188,14 +198,18 @@ export function createApp(options: CreateAppOptions): Express {
     generateContent,
     primaryModelId = DEFAULT_PRIMARY_MODEL_ID,
     fallbackModelId = DEFAULT_FALLBACK_MODEL_ID,
+    trustProxy,
   } = options;
 
   const app = express();
 
-  // Trust the first proxy hop (Cloud Run / AI Studio hosting) so req.ip
-  // reflects the real client instead of the proxy, which the rate limiter
-  // below depends on.
-  app.set("trust proxy", 1);
+  // Only trust X-Forwarded-For when the deployment explicitly configures a
+  // proxy hop count/address (e.g. Cloud Run). Without this, req.ip is the
+  // real socket address and a directly reachable instance can't have its
+  // rate-limit identity spoofed via a forged header.
+  if (trustProxy !== undefined) {
+    app.set("trust proxy", trustProxy);
+  }
 
   app.use(express.json({ limit: "100kb" }));
 

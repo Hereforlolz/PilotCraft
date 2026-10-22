@@ -19,10 +19,24 @@ const ai = new GoogleGenAI({
   }
 });
 
+// TRUST_PROXY configures Express's "trust proxy" setting - only set this
+// when actually deployed behind a reverse proxy you control (e.g. "1" for
+// one hop on Cloud Run). Left unset, no proxy is trusted and req.ip is the
+// real socket address, so a directly reachable instance can't have its
+// rate-limit identity spoofed via a forged X-Forwarded-For header.
+function parseTrustProxy(value: string | undefined): boolean | number | string | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  const asNumber = Number(value);
+  return Number.isNaN(asNumber) ? value : asNumber;
+}
+
 const app = createApp({
   generateContent: (params) => ai.models.generateContent(params),
   primaryModelId: DEFAULT_PRIMARY_MODEL_ID,
   fallbackModelId: DEFAULT_FALLBACK_MODEL_ID,
+  trustProxy: parseTrustProxy(process.env.TRUST_PROXY),
 });
 
 async function startServer() {

@@ -36,3 +36,32 @@ test("an invalid aiSuitability.rating enum value is rejected", () => {
   const result = analysisReportSchema.safeParse(report);
   assert.equal(result.success, false);
 });
+
+// Regression test for a finding an independent audit raised: every array in
+// the schema allowed zero items, so a report could have no workflow, risks,
+// pilot phases, success metrics, or missing-evidence entries and still pass.
+test("emptying a core planning array is rejected", () => {
+  for (const field of ["clarifyingQuestions", "futureWorkflow", "stakeholders", "adoptionBarriers", "risks", "pilotPlan", "successMetrics"] as const) {
+    const report = { ...validReport, [field]: [] };
+    const result = analysisReportSchema.safeParse(report);
+    assert.equal(result.success, false, `${field}: [] should be rejected`);
+  }
+});
+
+test("an empty evidenceCheck.missingEvidence is rejected (it must not be able to imply evidence is complete)", () => {
+  const report = { ...validReport, evidenceCheck: { ...validReport.evidenceCheck, missingEvidence: [] } };
+  const result = analysisReportSchema.safeParse(report);
+  assert.equal(result.success, false);
+});
+
+test("evidenceCheck.userProvidedFacts and .assumptions may legitimately be empty", () => {
+  const report = { ...validReport, evidenceCheck: { ...validReport.evidenceCheck, userProvidedFacts: [], assumptions: [] } };
+  const result = analysisReportSchema.safeParse(report);
+  assert.equal(result.success, true);
+});
+
+test("a blank string entry in a string array is rejected", () => {
+  const report = { ...validReport, clarifyingQuestions: [...validReport.clarifyingQuestions, "   "] };
+  const result = analysisReportSchema.safeParse(report);
+  assert.equal(result.success, false);
+});

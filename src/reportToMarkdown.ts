@@ -5,6 +5,12 @@ function list(items: string[], fallback = '_None identified._'): string {
   return items.map((item) => `- ${item}`).join('\n');
 }
 
+// Markdown table cells break if a value contains a pipe or newline, since
+// both are structurally significant in table syntax.
+function cell(value: string): string {
+  return value.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+}
+
 /**
  * Renders an AnalysisReport as a standalone Markdown document, covering the
  * same sections ReportDisplay shows in the UI, in the same order.
@@ -40,7 +46,7 @@ export function reportToMarkdown(report: AnalysisReport): string {
       list(report.evidenceCheck.assumptions, '_No major assumptions identified._'),
       ``,
       `**Missing Evidence:**`,
-      list(report.evidenceCheck.missingEvidence, '_Information complete._'),
+      list(report.evidenceCheck.missingEvidence, '_No evidence gaps listed._'),
     ].join('\n')
   );
 
@@ -50,7 +56,7 @@ export function reportToMarkdown(report: AnalysisReport): string {
       ``,
       `| Step | Human Role | AI Role |`,
       `|---|---|---|`,
-      ...report.futureWorkflow.map((w) => `| ${w.step} | ${w.humanRole} | ${w.aiRole} |`),
+      ...report.futureWorkflow.map((w) => `| ${cell(w.step)} | ${cell(w.humanRole)} | ${cell(w.aiRole)} |`),
     ].join('\n')
   );
 
@@ -81,7 +87,7 @@ export function reportToMarkdown(report: AnalysisReport): string {
       ``,
       `| Role | Impact | Involvement |`,
       `|---|---|---|`,
-      ...report.stakeholders.map((s) => `| ${s.role} | ${s.impact} | ${s.involvement} |`),
+      ...report.stakeholders.map((s) => `| ${cell(s.role)} | ${cell(s.impact)} | ${cell(s.involvement)} |`),
     ].join('\n')
   );
 
@@ -123,7 +129,9 @@ export function reportToMarkdown(report: AnalysisReport): string {
       ``,
       `| Metric | Baseline | Target | Collection Method |`,
       `|---|---|---|---|`,
-      ...report.successMetrics.map((m) => `| ${m.metric} | ${m.baseline} | ${m.proposedTarget} | ${m.collectionMethod} |`),
+      ...report.successMetrics.map(
+        (m) => `| ${cell(m.metric)} | ${cell(m.baseline)} | ${cell(m.proposedTarget)} | ${cell(m.collectionMethod)} |`
+      ),
     ].join('\n')
   );
 

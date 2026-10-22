@@ -71,6 +71,7 @@ export default function App() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedResult = false;
 
       if (reader) {
         while (true) {
@@ -92,11 +93,16 @@ export default function App() {
               } else if (eventType === 'result') {
                 setReport(eventData);
                 setCooldown(COOLDOWN_SECONDS);
+                receivedResult = true;
               } else if (eventType === 'error') {
                 throw new Error(eventData.message);
               }
             }
           }
+        }
+
+        if (!receivedResult) {
+          throw new Error('The connection closed before the assessment finished. Please try again.');
         }
       }
     } catch (err: any) {
@@ -149,6 +155,9 @@ export default function App() {
             </div>
 
             <div className="relative group">
+              <label htmlFor="scenario-input" className="sr-only">
+                Describe your workplace scenario
+              </label>
               <textarea
                 id="scenario-input"
                 className="w-full h-64 p-6 bg-white border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all resize-none shadow-sm group-hover:border-slate-300 text-slate-700 leading-relaxed"
@@ -156,6 +165,7 @@ export default function App() {
                 value={scenario}
                 onChange={(e) => setScenario(e.target.value)}
                 disabled={isLoading}
+                maxLength={4000}
               />
               <div className="absolute bottom-4 right-4 flex items-center gap-2">
                 <button
@@ -164,7 +174,10 @@ export default function App() {
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white px-6 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-200 active:scale-95 disabled:shadow-none"
                 >
                   {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span className="sr-only">Analyzing…</span>
+                    </>
                   ) : cooldown > 0 ? (
                     <span>Wait {cooldown}s</span>
                   ) : (
@@ -220,7 +233,7 @@ export default function App() {
                       <BrainCircuit className="w-10 h-10 text-indigo-600 animate-bounce" />
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-2">{loadingStep}</h3>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2" role="status" aria-live="polite">{loadingStep}</h3>
                   <p className="text-slate-500 text-sm max-w-xs mx-auto">
                     Gemini is processing your scenario against the Adoption Framework. This usually takes 15-30 seconds.
                   </p>
@@ -229,7 +242,7 @@ export default function App() {
             </AnimatePresence>
 
             {error && (
-              <div className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-2xl flex gap-4 items-start shadow-sm animate-in slide-in-from-top-4 duration-500 print:hidden">
+              <div role="alert" className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-2xl flex gap-4 items-start shadow-sm animate-in slide-in-from-top-4 duration-500 print:hidden">
                 <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
                 <div className="flex-1">
                   <h3 className="font-bold text-rose-900">Analysis Failed</h3>

@@ -116,7 +116,7 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             </div>
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Missing Evidence</p>
-              <p className="text-sm text-slate-600">{report.evidenceCheck.missingEvidence.join(", ") || "Information complete."}</p>
+              <p className="text-sm text-slate-600">{report.evidenceCheck.missingEvidence.join(", ") || "No evidence gaps listed."}</p>
             </div>
           </div>
         </div>

@@ -5,17 +5,22 @@ import { z } from "zod";
 // model but doesn't guarantee enum values or numeric ranges are honored, so
 // this is the actual runtime check before a report reaches the client.
 
-const nonEmptyString = z.string().min(1);
-const stringArray = z.array(z.string());
+const nonEmptyString = z.string().trim().min(1);
+// Blank entries (e.g. "") carry no information and would otherwise pass
+// validation while rendering as an empty bullet.
+const stringArray = z.array(z.string().trim().min(1));
+// For sections where "nothing here" is itself a meaningful finding rather
+// than a sign the model skipped the section, require at least one entry.
+const nonEmptyArray = <T extends z.ZodTypeAny>(schema: T) => z.array(schema).min(1);
 
 export const analysisReportSchema = z.object({
   problemStatement: nonEmptyString,
-  clarifyingQuestions: stringArray,
+  clarifyingQuestions: nonEmptyArray(z.string().trim().min(1)),
   aiSuitability: z.object({
     rating: z.enum(["strong", "conditional", "poor"]),
     rationale: nonEmptyString,
   }),
-  futureWorkflow: z.array(
+  futureWorkflow: nonEmptyArray(
     z.object({
       step: nonEmptyString,
       humanRole: nonEmptyString,
@@ -23,27 +28,27 @@ export const analysisReportSchema = z.object({
     })
   ),
   responsibilitySplit: z.object({
-    human: stringArray,
-    ai: stringArray,
+    human: nonEmptyArray(z.string().trim().min(1)),
+    ai: nonEmptyArray(z.string().trim().min(1)),
   }),
-  stakeholders: z.array(
+  stakeholders: nonEmptyArray(
     z.object({
       role: nonEmptyString,
       impact: nonEmptyString,
       involvement: nonEmptyString,
     })
   ),
-  adoptionBarriers: z.array(
+  adoptionBarriers: nonEmptyArray(
     z.object({
       barrier: nonEmptyString,
       mitigation: nonEmptyString,
     })
   ),
   trainingAndCommunication: z.object({
-    trainingActions: stringArray,
-    communicationActions: stringArray,
+    trainingActions: nonEmptyArray(z.string().trim().min(1)),
+    communicationActions: nonEmptyArray(z.string().trim().min(1)),
   }),
-  risks: z.array(
+  risks: nonEmptyArray(
     z.object({
       risk: nonEmptyString,
       severity: z.enum(["low", "medium", "high"]),
@@ -51,15 +56,15 @@ export const analysisReportSchema = z.object({
       humanReview: nonEmptyString,
     })
   ),
-  pilotPlan: z.array(
+  pilotPlan: nonEmptyArray(
     z.object({
       period: nonEmptyString,
-      actions: stringArray,
+      actions: nonEmptyArray(z.string().trim().min(1)),
       suggestedOwner: nonEmptyString,
-      evidenceToCollect: stringArray,
+      evidenceToCollect: nonEmptyArray(z.string().trim().min(1)),
     })
   ),
-  successMetrics: z.array(
+  successMetrics: nonEmptyArray(
     z.object({
       metric: nonEmptyString,
       baseline: nonEmptyString,
@@ -68,14 +73,17 @@ export const analysisReportSchema = z.object({
     })
   ),
   decisionCriteria: z.object({
-    stop: stringArray,
-    revise: stringArray,
-    scale: stringArray,
+    stop: nonEmptyArray(z.string().trim().min(1)),
+    revise: nonEmptyArray(z.string().trim().min(1)),
+    scale: nonEmptyArray(z.string().trim().min(1)),
   }),
   evidenceCheck: z.object({
+    // Legitimately empty when the scenario is fully specified or the model
+    // inferred nothing - unlike the sections above, "none" is a valid
+    // outcome here, not a sign the model skipped the section.
     userProvidedFacts: stringArray,
     assumptions: stringArray,
-    missingEvidence: stringArray,
+    missingEvidence: nonEmptyArray(z.string().trim().min(1)),
   }),
   readinessScore: z.object({
     score: z.number().int().min(0).max(100),
