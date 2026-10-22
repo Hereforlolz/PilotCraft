@@ -136,6 +136,79 @@ test("a client disconnect during the fallback delay prevents the fallback call",
   assert.ok(!events.some((e) => e.type === "result"), "no result should be sent once the client is gone");
 });
 
+// Regression test: an empty response used to throw a message that didn't
+// match isRetryable, ending the assessment even though the backup model
+// might well succeed. It must now be treated the same as any other
+// retryable failure.
+test("an empty primary response falls back to the backup model instead of ending the assessment", async () => {
+  const res = new FakeResponse();
+  const calls: string[] = [];
+  const { events, sendEvent } = makeEvents();
+
+  const generateContent: GenerateContentFn = ({ model }) => {
+    calls.push(model);
+    if (model === "primary-model") {
+      return Promise.resolve({ text: "" });
+    }
+    return Promise.resolve({ text: JSON.stringify(validReport) });
+  };
+
+  await runAnalysisRoute({
+    res,
+    scenario: "test scenario",
+    primaryModelId: "primary-model",
+    fallbackModelId: "fallback-model",
+    perAttemptTimeoutMs: 5000,
+    totalTimeoutMs: 10000,
+    fallbackDelayMs: 1,
+    systemInstruction: "test",
+    responseSchema: {},
+    generateContent,
+    sendEvent,
+    logModelUsage: () => {},
+  });
+
+  assert.deepEqual(calls, ["primary-model", "fallback-model"], "an empty primary response must still trigger the fallback model");
+  assert.ok(events.some((e) => e.type === "result"), "the fallback's result should be sent to the client");
+});
+
+// Regression test: a repair request used to contain only the validation
+// errors and the previous (invalid) output, with no way to recover a fact
+// that the first response had dropped or truncated.
+test("a repair request includes the original scenario, not just the invalid output", async () => {
+  const res = new FakeResponse();
+  const { events, sendEvent } = makeEvents();
+  const repairContents: string[] = [];
+  let callCount = 0;
+
+  const generateContent: GenerateContentFn = ({ contents }) => {
+    callCount++;
+    if (callCount === 1) {
+      return Promise.resolve({ text: "{this is not json" });
+    }
+    repairContents.push(contents);
+    return Promise.resolve({ text: JSON.stringify(validReport) });
+  };
+
+  await runAnalysisRoute({
+    res,
+    scenario: "UNIQUE_SCENARIO_MARKER_12345",
+    primaryModelId: "primary-model",
+    fallbackModelId: "fallback-model",
+    perAttemptTimeoutMs: 5000,
+    totalTimeoutMs: 10000,
+    systemInstruction: "test",
+    responseSchema: {},
+    generateContent,
+    sendEvent,
+    logModelUsage: () => {},
+  });
+
+  assert.equal(repairContents.length, 1);
+  assert.match(repairContents[0], /UNIQUE_SCENARIO_MARKER_12345/);
+  assert.ok(events.some((e) => e.type === "result"));
+});
+
 const base = {
   scenario: "test scenario",
   primaryModelId: "primary-model",

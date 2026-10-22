@@ -17,5 +17,7 @@ services:
         value: "22"
       - key: PORT
         value: "3000"
+      - key: TRUST_PROXY
+        value: "1"
       - key: GEMINI_API_KEY
         sync: false

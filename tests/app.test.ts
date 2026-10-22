@@ -111,6 +111,50 @@ test("rate limiting returns 429 after the per-IP limit is exceeded", async () =>
   });
 });
 
+// Regression test for a bypass an independent audit found: with "trust
+// proxy" unconditionally enabled, a directly connected caller could choose
+// a fresh req.ip (and therefore a fresh rate-limit identity) per request by
+// supplying its own X-Forwarded-For header. By default (no trustProxy
+// option), that header must be ignored.
+test("forwarded headers do not bypass the rate limiter on a direct connection", async () => {
+  await withServer(neverCalled, async (base) => {
+    let lastStatus = 0;
+    for (let i = 0; i < 9; i++) {
+      const res = await fetch(`${base}/api/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Forwarded-For": `10.0.0.${i}` },
+        body: JSON.stringify({}),
+      });
+      lastStatus = res.status;
+    }
+    assert.equal(lastStatus, 429, "a spoofed X-Forwarded-For must not grant a fresh rate-limit identity");
+  });
+});
+
+test("trustProxy option, when explicitly set, does make req.ip follow X-Forwarded-For", async () => {
+  await withServer(
+    neverCalled,
+    async (base) => {
+      let lastStatus = 0;
+      for (let i = 0; i < 9; i++) {
+        const res = await fetch(`${base}/api/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Forwarded-For": `10.0.0.${i}` },
+          body: JSON.stringify({}),
+        });
+        lastStatus = res.status;
+      }
+      // Documents the opt-in trade-off: once a deployment explicitly says it
+      // sits behind one proxy hop, each distinct forwarded address is
+      // treated as a distinct client (same as Express's own semantics), so
+      // the rate limiter never trips here - every request instead reaches
+      // the (later) scenario validation and gets its own clean 400.
+      assert.equal(lastStatus, 400);
+    },
+    { trustProxy: 1 }
+  );
+});
+
 const okGenerate: GenerateContentFn = async () => ({ text: JSON.stringify(validReport) });
 const post = (base: string, body: unknown, headers: Record<string, string> = {}) =>
   fetch(`${base}/api/analyze`, {

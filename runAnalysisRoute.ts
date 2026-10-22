@@ -94,7 +94,7 @@ export async function runAnalysisRoute(opts: RunAnalysisRouteOptions): Promise<v
   const requestRepair = (modelId: string, signal: AbortSignal): RequestRepair => async (details, previousRawText) => {
     const repairResponse = await generateContent({
       model: modelId,
-      contents: `Your previous JSON response did not match the required schema.\n\nValidation errors: ${details}\n\nYour previous response:\n${previousRawText}\n\nReturn a corrected JSON response that fixes these issues and fully matches the schema. Respond with only the corrected JSON, no commentary.`,
+      contents: `Original scenario:\n${scenario}\n\nYour previous JSON response did not match the required schema.\n\nValidation errors: ${details}\n\nYour previous response:\n${previousRawText}\n\nReturn a corrected JSON response that fixes these issues, fully matches the schema, and preserves every fact from the original scenario above. Respond with only the corrected JSON, no commentary.`,
       config: {
         responseMimeType: "application/json",
         responseSchema,

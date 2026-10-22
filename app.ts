@@ -208,10 +208,13 @@ export interface CreateAppOptions {
   perAttemptTimeoutMs?: number;
   totalTimeoutMs?: number;
   /**
-   * Express "trust proxy" setting: a hop count, boolean, or subnet list.
-   * Defaults to 1. If req.ip shows a proxy's address instead of the real
-   * client on your host, the per-IP limiter degrades into one shared bucket,
-   * so verify it after deploying and adjust (see TRUST_PROXY in the README).
+   * Express's "trust proxy" setting, which controls where req.ip (the
+   * rate-limit key) comes from. Only set this when the app is actually
+   * deployed behind a reverse proxy that itself overwrites/controls
+   * X-Forwarded-For - trusting it on a directly reachable instance lets any
+   * caller spoof a fresh IP identity per request and bypass the rate
+   * limiter entirely. Left unset (the default), Express trusts no proxy and
+   * req.ip is the actual socket address.
    */
   trustProxy?: boolean | number | string;
   /**
@@ -237,16 +240,19 @@ export function createApp(options: CreateAppOptions): Express {
     apiKeyConfigured = true,
     perAttemptTimeoutMs = 40000,
     totalTimeoutMs = 90000,
-    trustProxy = 1,
+    trustProxy,
     dailyRequestCap,
   } = options;
 
   const app = express();
 
-  // Trust the configured number of proxy hops (default 1: Cloud Run / AI
-  // Studio / Render) so req.ip reflects the real client instead of the proxy,
-  // which the rate limiter below depends on.
-  app.set("trust proxy", trustProxy);
+  // Only trust X-Forwarded-For when the deployment explicitly configures a
+  // proxy hop count/address (e.g. Cloud Run). Without this, req.ip is the
+  // real socket address and a directly reachable instance can't have its
+  // rate-limit identity spoofed via a forged header.
+  if (trustProxy !== undefined) {
+    app.set("trust proxy", trustProxy);
+  }
 
   app.use(express.json({ limit: "100kb" }));
 

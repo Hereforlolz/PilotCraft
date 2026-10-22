@@ -19,3 +19,11 @@ test("an AbortError is retryable", () => {
 test("a validation failure after repair is retryable (falls back to the other model)", () => {
   assert.equal(isRetryable({ message: "Gemini response failed validation after repair attempt: ..." }), true);
 });
+
+test("an empty response from the model is retryable (falls back rather than ending the assessment)", () => {
+  assert.equal(isRetryable({ message: "Empty response from Gemini" }), true);
+});
+
+test("an empty repair response is retryable", () => {
+  assert.equal(isRetryable({ message: "Empty response from Gemini repair attempt" }), true);
+});

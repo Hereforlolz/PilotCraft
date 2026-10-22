@@ -12,14 +12,18 @@ const numberFromEnv = (name: string): number | undefined => {
   return Number.isFinite(value) && value > 0 ? value : undefined;
 };
 
-// TRUST_PROXY: a hop count ("1"), "true"/"false", or an Express subnet list.
-const parseTrustProxy = (raw: string | undefined): boolean | number | string => {
-  if (raw === undefined || raw.trim() === "") return 1;
-  const v = raw.trim();
-  if (v === "true") return true;
-  if (v === "false") return false;
-  return /^\d+$/.test(v) ? Number(v) : v;
-};
+// TRUST_PROXY configures Express's "trust proxy" setting - only set this
+// when actually deployed behind a reverse proxy you control (e.g. "1" for
+// one hop on Cloud Run). Left unset, no proxy is trusted and req.ip is the
+// real socket address, so a directly reachable instance can't have its
+// rate-limit identity spoofed via a forged X-Forwarded-For header.
+function parseTrustProxy(value: string | undefined): boolean | number | string | undefined {
+  if (value === undefined || value === "") return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  const asNumber = Number(value);
+  return Number.isNaN(asNumber) ? value : asNumber;
+}
 
 // Hosts like Render/Railway/Cloud Run tell the app which port to bind via PORT.
 const PORT = numberFromEnv("PORT") ?? 3000;
