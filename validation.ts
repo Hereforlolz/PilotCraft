@@ -34,7 +34,12 @@ export const analysisReportSchema = z.object({
   stakeholders: nonEmptyArray(
     z.object({
       role: nonEmptyString,
-      impact: nonEmptyString,
+      // The UI renders this as a "<level> impact" pill, so it must be a level,
+      // not prose. Case/whitespace are normalized (the model may say "High").
+      impact: z.preprocess(
+        (value) => (typeof value === "string" ? value.trim().toLowerCase() : value),
+        z.enum(["low", "medium", "high"])
+      ),
       involvement: nonEmptyString,
     })
   ),
@@ -85,6 +90,14 @@ export const analysisReportSchema = z.object({
     assumptions: stringArray,
     missingEvidence: nonEmptyArray(z.string().trim().min(1)),
   }),
+  // Optional so reports without it (older data, sample/eval fixtures) stay
+  // valid; z.object strips unknown keys, so it must be declared to survive.
+  inputFit: z
+    .object({
+      type: z.enum(["specific_workflow", "broad_or_general"]),
+      explanation: nonEmptyString,
+    })
+    .optional(),
   readinessScore: z.object({
     score: z.number().int().min(0).max(100),
     explanation: nonEmptyString,

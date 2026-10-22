@@ -7,6 +7,12 @@ PilotCraft turns a plain-language description of a workplace problem into a
 structured, evidence-checked assessment of whether — and how — to pilot AI
 on it, rather than a "yes, use AI" recommendation.
 
+**Live demo:** <https://ai-adoption-strategy-generator.ai.studio> (hosted on
+Google AI Studio). Don't enter confidential information - see
+[Privacy and data handling](#privacy-and-data-handling).
+
+**Read first:** [Case study](docs/case-study.md)
+
 ## The problem it addresses
 
 Teams considering AI adoption often skip straight to "let's build an AI
@@ -101,9 +107,12 @@ on what a human should *not* accept blindly from it.
 flowchart TD
     A["User scenario (React UI)"] --> B["Express POST /api/analyze"]
     B --> C["Primary: Gemini 3.8 Flash"]
-    C -->|"retryable failure (429/5xx/timeout)"| F["Fallback: Gemini 3.1 Flash-Lite"]
+    C -->|"429/503: one retry"| C
+    C -->|"still failing"| F["Fallback: Gemini 3.1 Flash-Lite"]
+    F -->|"still failing"| L["Last resort: Gemini 2.5 Flash"]
     C --> D["Validate + one same-model repair"]
     F --> D
+    L --> D
     D --> V["Validated report"]
     V --> S["SSE stream"]
     S --> U["Browser displays report"]
@@ -130,13 +139,20 @@ print to PDF.
   `responseSchema` for structured output. Current configuration
   (`app.ts`):
   - Primary model: `gemini-3.8-flash`
-  - Fallback model: `gemini-3.1-flash-lite`, tried automatically if the
-    primary fails with a retryable error (429/500/502/503/504, a timeout,
-    or a schema-validation failure that survives one repair attempt) — after
-    a 1-second delay to let transient capacity spikes settle, with the
-    client-disconnect check re-run after that delay so a client that left
-    during it doesn't still get a wasted fallback call
-  - Per-attempt timeout: 25 seconds; overall request timeout: 55 seconds
+  - On a 429/503 the same model is retried once after a short backoff,
+    since those are usually brief capacity blips
+  - Fallback model: `gemini-3.1-flash-lite`, tried if the primary still
+    fails with a retryable error (429/500/502/503/504, a timeout, an
+    unknown model ID, or a schema-validation failure that survives one
+    repair attempt) — after a 1-second delay, with the client-disconnect
+    check re-run after that delay so a client that left doesn't still get a
+    wasted model call
+  - Last-resort model: `gemini-2.5-flash`, tried if both of the above fail
+  - If every model fails, the user sees the *diagnosed* cause (bad key,
+    quota, overload, unknown model, timeout) rather than a generic message
+  - Per-attempt timeout: 40 seconds; overall request timeout: 90 seconds
+  - All of the above are overridable with environment variables (see
+    [Configuration](#configuration))
 - **Output validation:** the parsed JSON response is validated at runtime
   against a Zod schema (`validation.ts`) — not just guided by the Gemini
   schema, actually checked (enum values, `readinessScore.score` as an
@@ -170,6 +186,102 @@ npm run build
 npm start
 ```
 
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | — (required) | Your Gemini API key. Injected automatically in Google AI Studio. |
+| `GEMINI_PRIMARY_MODEL` | `gemini-3.8-flash` | First model tried. |
+| `GEMINI_FALLBACK_MODEL` | `gemini-3.1-flash-lite` | Tried if the primary fails. |
+| `GEMINI_EXTRA_MODELS` | `gemini-2.5-flash` | Comma-separated last-resort models. |
+| `GEMINI_ATTEMPT_TIMEOUT_MS` | `40000` | Per-model-attempt timeout. |
+| `GEMINI_TOTAL_TIMEOUT_MS` | `90000` | Whole-request timeout. |
+| `PORT` | `3000` | Port to listen on. Hosts such as Render set this for you. |
+| `TRUST_PROXY` | `1` | Number of reverse-proxy hops in front of the app, so the per-IP rate limiter sees real client IPs. Also accepts `true`/`false` or an Express subnet list. |
+| `DAILY_REQUEST_CAP` | `200` | Global limit on analyses per UTC day across all visitors - a backstop for the API key's quota. |
+
+`GET /api/health` reports whether a key is configured and which models are
+in use, without calling Gemini — handy as a pre-flight check before a demo.
+
+## Running standalone (outside AI Studio)
+
+The live demo is published from Google AI Studio, which runs whatever code
+was last imported into the AI Studio project - changes merged to this
+repository reach the demo only after the project is synced from GitHub and
+republished.
+
+AI Studio apps share its quota, so they can hit 429/503 errors at busy
+times. Running on your own key and host is more reliable:
+
+1. **Get a key.** Create one at <https://aistudio.google.com/apikey>. For
+   the most headroom, link it to a billing-enabled Google Cloud project;
+   free-tier limits are far lower.
+2. **Run locally** (quickest): follow [Local setup](#local-setup).
+3. **Or deploy** — any Node 20+ host works. The server is one process
+   serving both the API and the built UI:
+   - Build command: `npm ci && npm run build`
+   - Start command: `npm start`
+   - Environment: `NODE_ENV=production`, `GEMINI_API_KEY=<your key>`
+   - The app listens on `$PORT` (default `3000`), so Cloud Run, Render and
+     Railway work without extra port configuration.
+4. **Verify** before relying on it: open `/api/health` (expect
+   `"apiKeyConfigured": true`) and generate one real report.
+
+### Pre-baked sample reports (optional, recommended for a public demo)
+
+By default each sample-scenario button makes a live Gemini call, which counts
+against the per-IP limit, the daily cap and your key's quota. To make them
+instant and free, generate the three sample reports once with your own key:
+
+```bash
+npm run bake-samples   # needs GEMINI_API_KEY; writes src/bakedSamples.json
+```
+
+The script runs each scenario in `src/sampleScenarios.ts` through the real
+`/api/analyze` pipeline (same retries, validation and repair), records which
+model answered and when, and writes nothing unless all three succeed. **Read
+the reports before committing them** - generated reports can misstate the
+input. Commit `src/bakedSamples.json` and redeploy.
+
+In the UI a baked sample shows an "Instant" tag and is labelled
+"Pre-generated by Gemini (model) on date - cached, no live call". A cached
+report is used only while its stored scenario text exactly matches the sample
+text, and `npm test` fails if a committed bake is stale or fails the report
+schema. With nothing baked (the default) the buttons behave as before.
+
+### Alternative: deploying on Render (free tier)
+
+The live demo does not use Render; this is an optional way to self-host the
+same code. A [`render.yaml`](./render.yaml) Blueprint is included: in Render choose
+**New > Blueprint**, point it at this repo, and enter `GEMINI_API_KEY` when
+prompted (use a dedicated key, ideally with a quota/billing cap set in AI
+Studio). Or create a Web Service by hand with build `npm install && npm run build`,
+start `npm start`, health check path `/api/health`, and the environment
+variables `NODE_ENV=production` and `GEMINI_API_KEY`.
+
+After the first deploy:
+
+1. Open `/api/health` and expect `"apiKeyConfigured": true`.
+2. Generate one real report to confirm the model IDs work for your key.
+3. **Check the rate limiter sees real client IPs.** If every visitor appears
+   to share one address, the limiter degrades into a single shared bucket;
+   adjust `TRUST_PROXY` (the number of proxy hops in front of the app).
+   `DAILY_REQUEST_CAP` protects your quota either way.
+
+Free-tier caveats: the service [spins down after 15 minutes without
+traffic](https://render.com/docs/free), so the first visit afterwards takes
+about a minute to wake, and the in-memory rate-limit counters reset when it
+does. The free Gemini tier is also subject to Google's terms for unpaid
+services, which may allow submitted content to be used to improve Google's
+products - another reason not to enter confidential data.
+
+If a model ID is rejected, set `GEMINI_PRIMARY_MODEL` /
+`GEMINI_FALLBACK_MODEL` to IDs your key can use.
+
+**If Gemini is unreachable during a demo**, the UI offers a pre-built
+sample report (clearly labelled as not AI-generated) on any error and in
+the sidebar, so the interface can always be shown.
+
 ## Testing
 
 ```bash
@@ -178,7 +290,7 @@ npm test       # node --import tsx --test tests/*.test.ts
 npm run build  # vite build + esbuild bundle of server.ts
 ```
 
-`npm test` runs **74 tests, all passing**, covering:
+`npm test` runs **105 tests, all passing**, covering:
 
 - the retry/fallback orchestration (a client disconnect must not trigger a
   pointless fallback model call; a genuine timeout still falls back
@@ -348,6 +460,13 @@ Full detail: [`evals/results.md`](./evals/results.md) (human-readable) and
 [`evals/results/latest.json`](./evals/results/latest.json)
 (machine-readable, per-check detail for every scenario).
 
+**Which model answered:** the model IDs above were run by the author in Google
+AI Studio. This September 4 run predates per-scenario model recording, so its
+results do not say whether the primary or the fallback model produced each
+report. From now on, `npm run eval` records this: `evals/results/latest.json`
+gets `answeredBy` and `modelsCalled` for each scenario, and `evals/results.md`
+gets an "Answered by" column.
+
 **Limitation:** this was one live model run over nine synthetic scenarios
 using deterministic heuristic checks. It demonstrates tested behavior
 under those conditions; it does not establish statistical reliability,
@@ -365,7 +484,11 @@ in future model runs.
   failed per request (for its own retry logic), capped at 200 entries and
   never exposed to the client — it does not include scenario text.
 - What Gemini itself does with submitted content is governed by Google's
-  own API terms, not by this project.
+  own [API terms](https://ai.google.dev/gemini-api/terms), not by this
+  project. On unpaid (free-tier) use, those terms allow Google to use both
+  the submitted text and the generated response to improve its products, and
+  human reviewers may read them; paid use is treated differently. The app's
+  footer says the same.
 
 ## Honest limitations
 
@@ -400,9 +523,9 @@ in future model runs.
 
 ![PilotCraft landing page](./screenshots/landing-page.png)
 
-The input screen, captured from a locally running build. There is
-currently no public deployment of this app — no live-demo link is included
-because none exists to link to.
+The input screen, captured from a locally running build. A live copy is
+published on Google AI Studio:
+<https://ai-adoption-strategy-generator.ai.studio>.
 
 There is no screenshot of a generated report here yet — a verified one,
 checked against its own input for fidelity, is still pending.

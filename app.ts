@@ -4,6 +4,9 @@ import { runAnalysisRoute, type GenerateContentFn } from "./runAnalysisRoute";
 
 export const DEFAULT_PRIMARY_MODEL_ID = "gemini-3.8-flash";
 export const DEFAULT_FALLBACK_MODEL_ID = "gemini-3.1-flash-lite";
+// Last resort: an older, widely available model that is much less likely to be
+// capacity-constrained than the newest releases.
+export const DEFAULT_EXTRA_MODEL_IDS = ["gemini-2.5-flash"];
 
 const MAX_SCENARIO_LENGTH = 4000;
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -53,7 +56,11 @@ export const responseSchema = {
         type: Type.OBJECT,
         properties: {
           role: { type: Type.STRING },
-          impact: { type: Type.STRING },
+          impact: {
+            type: Type.STRING,
+            enum: ["low", "medium", "high"],
+            description: "Exactly one of low | medium | high - how much this role's day-to-day work changes. Put any explanation in involvement, not here."
+          },
           involvement: { type: Type.STRING }
         },
         required: ["role", "impact", "involvement"]
@@ -135,6 +142,21 @@ export const responseSchema = {
       },
       required: ["userProvidedFacts", "assumptions", "missingEvidence"]
     },
+    inputFit: {
+      type: Type.OBJECT,
+      properties: {
+        type: {
+          type: Type.STRING,
+          enum: ["specific_workflow", "broad_or_general"],
+          description: "specific_workflow only if the input names a concrete task or process people do, or a concrete change to a named team's or function's work (e.g. replacing, automating or assisting it with AI), even if thin on detail. Everything else is broad_or_general: a personal/career question; a request for general AI strategy, advice or learning (even if it mentions a team, company or goal); a team, function or company name alone; or a goal alone."
+        },
+        explanation: {
+          type: Type.STRING,
+          description: "One or two plain sentences addressed to the user: why the input was classified this way and, if broad_or_general, what to describe instead (who does the task, how often, how long it takes)."
+        }
+      },
+      required: ["type", "explanation"]
+    },
     readinessScore: {
       type: Type.OBJECT,
       properties: {
@@ -156,25 +178,35 @@ export const responseSchema = {
   required: [
     "problemStatement", "clarifyingQuestions", "aiSuitability", "futureWorkflow",
     "responsibilitySplit", "stakeholders", "adoptionBarriers", "trainingAndCommunication",
-    "risks", "pilotPlan", "successMetrics", "decisionCriteria", "evidenceCheck", "readinessScore"
+    "risks", "pilotPlan", "successMetrics", "decisionCriteria", "evidenceCheck", "inputFit", "readinessScore"
   ]
 };
 
 export const SYSTEM_INSTRUCTION = `You are an AI Adoption Strategist. Analyze the workplace scenario the user describes and produce a structured adoption assessment, following these rules strictly:
 
 1. Evidence discipline: only treat a fact as established if the user actually stated it. Populate evidenceCheck.userProvidedFacts with facts taken directly from the scenario, evidenceCheck.assumptions with anything you inferred or assumed to fill gaps, and evidenceCheck.missingEvidence with concrete information that would be needed to validate the plan (e.g. current error rate, current cycle time, headcount) but was not given.
-2. Do not fabricate numbers. If the scenario doesn't state a metric, baseline, or ROI figure, do not invent one. successMetrics.baseline must say "Not provided - to be measured in pilot" (or similar) rather than a made-up figure when the user gave no baseline.
+2. Do not fabricate numbers. If the scenario doesn't state a metric, baseline, or ROI figure, do not invent one. successMetrics.baseline must say "Not provided - to be measured in pilot" (or similar) rather than a made-up figure when the user gave no baseline. This does not apply to clearly labeled proposed targets or thresholds (see rule 11); never invent baselines, current performance, or ROI figures.
 3. Unsupported claims stay claims. If the user asserts an ROI, savings, cost-reduction, replacement, or productivity figure (e.g. "this will cut costs by 80%"), record it in evidenceCheck.userProvidedFacts as a claim the user made, not as an established fact, and add a matching entry to evidenceCheck.assumptions or evidenceCheck.missingEvidence that explicitly says the figure is unverified and needs validation. Never treat an unverified claim like this as proven evidence when setting aiSuitability, pilotPlan, or decisionCriteria.
 4. A "strong" suitability rating requires actual evidence: a stated baseline, workflow detail, articulated success criteria, or a validated user need. If none of these were given, do not rate "strong" just because the task looks easy to automate - default to "conditional" until that evidence is collected, even for an apparently simple task.
 5. Consider non-AI alternatives before recommending AI. If a simpler fix (better documentation, a process or workflow change, fixing an existing tool, search, or taxonomy) would address the problem as well or better, say so explicitly in aiSuitability.rationale and let that pull the rating toward "conditional" or "poor" rather than defaulting to "strong".
-6. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step.
+6. Privacy: do not suggest collecting more personal or sensitive data than the scenario requires. If the scenario implies handling PII, health, financial, or other sensitive data, flag that explicitly as a risk with a concrete safeguard and required human review step. Do not recommend training, fine-tuning, or retaining sensitive data (for example logging personal or health content to improve a model) unless the scenario requires it; if the workflow would log or reuse such data, list that as a risk with a concrete safeguard and a human review step.
 7. Calibrate certainty. readinessScore.score is an integer from 0 through 100 - a percentage-style planning heuristic, NOT a 0-10 scale. Convert any intuitive "out of 10" sense before writing it down: 7/10 must be written as 70, not 7. The score and readinessScore.explanation must be grounded in what evidence actually supports - if key evidence is missing, the score should be lower and factorsReducingScore must name the specific gaps, not generic caveats.
-8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".`;
+8. Every entry in risks must have a specific, actionable humanReview step naming who checks what, and when - either a recurring cadence (e.g. "weekly") or a clearly defined trigger/threshold (e.g. "any invoice over $10,000") - not a vague "monitor closely" or an unscheduled "spot-check some of them".
+9. Stakeholder impact is a level, not prose. stakeholders[].impact must be exactly one of "low", "medium", or "high" - how much that role's day-to-day work changes. Describe what the role does or is asked to do in stakeholders[].involvement, never in impact.
+10. Input fit. Set inputFit.type to "specific_workflow" only if the input names a concrete task or process that people do, or a concrete change to a named team's or function's work (for example replacing, automating, or assisting it with AI), even when it is thin on detail - thin evidence is handled by missingEvidence entries and a low readinessScore, not by this flag. Everything else is "broad_or_general": a personal or career question; a request for general AI strategy, advice, or learning, even when it mentions a team, company, or goal; a team, function, or company name alone; or a goal alone. Examples - broad_or_general: "our support team", "reduce costs", "give our support team a general AI strategy to reduce costs", "what is my first 90 days". specific_workflow: "replace our tier-1 support team with an AI agent", "advise our AP team on using AI to detect duplicate invoices". In inputFit.explanation, tell the user in one or two plain sentences why, and for "broad_or_general" what to describe instead (who does the task, how often, how long it takes). For "broad_or_general" inputs still give a best-effort assessment, but do not invent a specific workflow, and keep readinessScore low because the evidence is thin.
+11. Thresholds are proposals and must fit the baseline. Any numeric threshold or target in decisionCriteria or successMetrics.proposedTarget that the user did not state must be presented as a proposed starting value to calibrate against the pilot baseline (for example begin the entry with "Proposed:"). Thresholds must be consistent with any baseline the user did state - for example, a stop threshold must not allow performance worse than the stated current human performance.`;
 
 export interface CreateAppOptions {
   generateContent: GenerateContentFn;
   primaryModelId?: string;
   fallbackModelId?: string;
+  /** Last-resort models tried after the fallback, in order. */
+  extraModelIds?: string[];
+  /** Whether a Gemini API key was found at startup (reported by /api/health). */
+  apiKeyConfigured?: boolean;
+  /** Overridable so a slow model doesn't need a code change. */
+  perAttemptTimeoutMs?: number;
+  totalTimeoutMs?: number;
   /**
    * Express's "trust proxy" setting, which controls where req.ip (the
    * rate-limit key) comes from. Only set this when the app is actually
@@ -185,6 +217,12 @@ export interface CreateAppOptions {
    * req.ip is the actual socket address.
    */
   trustProxy?: boolean | number | string;
+  /**
+   * Max accepted /api/analyze requests per UTC day across all clients, as a
+   * backstop that protects the API key's quota even if per-IP limiting
+   * misbehaves. Unset means no global cap.
+   */
+  dailyRequestCap?: number;
 }
 
 /**
@@ -198,7 +236,12 @@ export function createApp(options: CreateAppOptions): Express {
     generateContent,
     primaryModelId = DEFAULT_PRIMARY_MODEL_ID,
     fallbackModelId = DEFAULT_FALLBACK_MODEL_ID,
+    extraModelIds = [],
+    apiKeyConfigured = true,
+    perAttemptTimeoutMs = 40000,
+    totalTimeoutMs = 90000,
     trustProxy,
+    dailyRequestCap,
   } = options;
 
   const app = express();
@@ -235,6 +278,22 @@ export function createApp(options: CreateAppOptions): Express {
     return timestamps.length > RATE_LIMIT_MAX_REQUESTS;
   }
 
+  // Global daily cap (fixed UTC-day window, in-memory): a backstop on total
+  // Gemini spend that doesn't depend on correctly identifying client IPs.
+  let dailyCount = 0;
+  let dailyKey = "";
+  function isDailyCapReached(): boolean {
+    if (dailyRequestCap === undefined) return false;
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== dailyKey) {
+      dailyKey = today;
+      dailyCount = 0;
+    }
+    if (dailyCount >= dailyRequestCap) return true;
+    dailyCount++;
+    return false;
+  }
+
   // Periodically evict IPs with no recent requests so the map doesn't grow
   // forever.
   setInterval(() => {
@@ -245,6 +304,12 @@ export function createApp(options: CreateAppOptions): Express {
       else requestLog.set(ip, fresh);
     }
   }, RATE_LIMIT_WINDOW_MS).unref();
+
+  // Cheap pre-flight check (no Gemini call, no rate limit): run
+  // `curl localhost:3000/api/health` before a demo to catch a missing key.
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: apiKeyConfigured, apiKeyConfigured, models: [primaryModelId, fallbackModelId, ...extraModelIds] });
+  });
 
   app.post("/api/analyze", async (req, res) => {
     const clientIp = req.ip || req.socket.remoteAddress || "unknown";
@@ -262,10 +327,19 @@ export function createApp(options: CreateAppOptions): Express {
       return res.status(400).json({ error: `Scenario is too long (max ${MAX_SCENARIO_LENGTH} characters).` });
     }
 
+    // Checked after validation so malformed requests don't use up the cap.
+    if (isDailyCapReached()) {
+      return res.status(429).json({
+        error: "The demo has reached its daily usage limit. Please try again tomorrow (UTC), or view the sample report.",
+      });
+    }
+
     // Set headers for SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    // Stop nginx-style reverse proxies from buffering the event stream.
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
     const sendEvent = (type: string, data: any) => {
@@ -279,8 +353,10 @@ export function createApp(options: CreateAppOptions): Express {
         scenario,
         primaryModelId,
         fallbackModelId,
-        perAttemptTimeoutMs: 25000,
-        totalTimeoutMs: 55000,
+        extraModelIds,
+        sameModelRetries: 1,
+        perAttemptTimeoutMs,
+        totalTimeoutMs,
         systemInstruction: SYSTEM_INSTRUCTION,
         responseSchema,
         // Note: per the SDK's own docs, aborting is a client-only operation -

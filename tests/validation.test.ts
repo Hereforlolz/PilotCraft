@@ -65,3 +65,42 @@ test("a blank string entry in a string array is rejected", () => {
   const result = analysisReportSchema.safeParse(report);
   assert.equal(result.success, false);
 });
+
+// Regression: a live run returned whole sentences in stakeholders[].impact, and
+// the UI (which renders "<impact> impact" as a pill) showed a paragraph.
+test("stakeholders[].impact must be low, medium or high, not prose", () => {
+  const stakeholders = (impact: string) => [{ role: "Support lead", impact, involvement: "Owns rollout" }];
+  const prose = analysisReportSchema.safeParse({
+    ...validReport,
+    stakeholders: stakeholders("Accountable for resource allocation, policy sign-off, and organizational performance."),
+  });
+  assert.equal(prose.success, false);
+  assert.match(prose.error!.issues.map((i) => i.path.join(".")).join(";"), /stakeholders\.0\.impact/);
+
+  for (const level of ["low", "medium", "high"]) {
+    assert.equal(analysisReportSchema.safeParse({ ...validReport, stakeholders: stakeholders(level) }).success, true, level);
+  }
+});
+
+test("stakeholders[].impact is normalized to lowercase so 'High' is accepted and stored as 'high'", () => {
+  const result = analysisReportSchema.safeParse({
+    ...validReport,
+    stakeholders: [{ role: "Support lead", impact: "  High ", involvement: "Owns rollout" }],
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.data!.stakeholders[0].impact, "high");
+});
+
+test("inputFit is optional, accepts both types, and rejects an unknown type or empty explanation", () => {
+  // Absent (older reports, sample and eval fixtures): still valid.
+  assert.equal(analysisReportSchema.safeParse(validReport).success, true);
+
+  for (const type of ["specific_workflow", "broad_or_general"]) {
+    const result = analysisReportSchema.safeParse({ ...validReport, inputFit: { type, explanation: "Because." } });
+    assert.equal(result.success, true, type);
+    assert.equal(result.data!.inputFit!.type, type);
+  }
+
+  assert.equal(analysisReportSchema.safeParse({ ...validReport, inputFit: { type: "vague", explanation: "x" } }).success, false);
+  assert.equal(analysisReportSchema.safeParse({ ...validReport, inputFit: { type: "broad_or_general", explanation: "" } }).success, false);
+});
