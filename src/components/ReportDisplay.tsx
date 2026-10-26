@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AnalysisReport } from "../types";
 import { CheckCircle2, AlertTriangle, XCircle, Users, BarChart3, ShieldAlert, Rocket, Info, FileText, HelpCircle, Activity, SplitSquareHorizontal, Ban, GraduationCap, Milestone } from "lucide-react";
 import { motion } from "motion/react";
@@ -38,6 +39,11 @@ const IMPACT_COLORS: Record<string, string> = {
 };
 
 export function ReportDisplay({ report }: ReportDisplayProps) {
+  const [showAllFactors, setShowAllFactors] = useState(false);
+  const factors = report.readinessScore.factorsReducingScore;
+  const visibleFactors = showAllFactors ? factors : factors.slice(0, 3);
+  const hiddenFactorCount = factors.length - visibleFactors.length;
+
   const getRatingIcon = (rating: string) => {
     switch (rating) {
       case 'strong': return <CheckCircle2 className="w-6 h-6 text-emerald-500" />;
@@ -121,13 +127,22 @@ export function ReportDisplay({ report }: ReportDisplayProps) {
             <div className="mt-6 pt-6 border-t border-indigo-500/30">
               <p className="text-xs font-semibold uppercase tracking-widest text-indigo-200 mb-2">Priority Gaps</p>
               <ul className="space-y-1">
-                {report.readinessScore.factorsReducingScore.slice(0, 3).map((f, i) => (
+                {visibleFactors.map((f, i) => (
                   <li key={i} className="text-sm text-indigo-50 flex items-start gap-2">
                     <span className="mt-1 w-1 h-1 bg-indigo-300 rounded-full shrink-0" />
                     {f}
                   </li>
                 ))}
               </ul>
+              {hiddenFactorCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllFactors(true)}
+                  className="mt-2 text-xs font-medium text-indigo-200 underline underline-offset-2 hover:text-white"
+                >
+                  Show {hiddenFactorCount} more
+                </button>
+              )}
             </div>
           )}
         </div>
